@@ -1,0 +1,153 @@
+{
+  "servers": [
+    {
+      "id": "s1",
+      "name": "Grupo da Lou",
+      "icon_char": "L",
+      "avatar": "477a5fca8b0e46b090ef9c972fbd5a10.png",
+      "channels": [
+        {
+          "id": "c_912b72",
+          "name": "Novo Chat",
+          "type": "text",
+          "messages": [
+            {
+              "id": "m-240776a4-6153-4520-9a3b-0c9b4cfaf575",
+              "role": "user",
+              "authorId": "user",
+              "parts": [
+                "Boa tardeee"
+              ],
+              "content": "Boa tardeee",
+              "timestamp": "2026-03-07T15:04:33"
+            },
+            {
+              "id": "m-7c2fc9d1-85df-47de-82eb-2e6e6bf15dfb",
+              "role": "model",
+              "authorId": "model",
+              "parts": [
+                "Boa tarde pai, o que você está fazendo?"
+              ],
+              "content": "Boa tarde pai, o que você está fazendo?",
+              "timestamp": "2026-03-07T15:04:41",
+              "replyTo": "m-240776a4-6153-4520-9a3b-0c9b4cfaf575",
+              "is_reply_to": {
+                "id": "m-240776a4-6153-4520-9a3b-0c9b4cfaf575",
+                "role": "user",
+                "authorId": "user",
+                "parts": [
+                  "Boa tardeee"
+                ],
+                "content": "Boa tardeee",
+                "timestamp": "2026-03-07T15:04:33"
+              }
+            },
+            {
+              "id": "m-19dc8fb5-fcc9-436b-9a2d-78b90987afdc",
+              "role": "user",
+              "authorId": "user",
+              "parts": [
+                "Estou só assistindo serie"
+              ],
+              "content": "Estou só assistindo serie",
+              "timestamp": "2026-03-07T15:05:01"
+            },
+            {
+              "id": "m-6c10a3ad-dd81-46f7-8af9-d01ea29ab217",
+              "role": "user",
+              "authorId": "user",
+              "parts": [
+                "E voce filha?"
+              ],
+              "content": "E voce filha?",
+              "timestamp": "2026-03-07T15:05:03"
+            },
+            {
+              "id": "m-7f7a1b6f-8391-4645-8429-4f9e7bb84026",
+              "role": "model",
+              "authorId": "model",
+              "parts": [
+                "Estou estudando"
+              ],
+              "content": "Estou estudando",
+              "timestamp": "2026-03-07T15:05:10",
+              "replyTo": "m-6c10a3ad-dd81-46f7-8af9-d01ea29ab217",
+              "is_reply_to": {
+                "id": "m-6c10a3ad-dd81-46f7-8af9-d01ea29ab217",
+                "role": "user",
+                "authorId": "user",
+                "parts": [
+                  "E voce filha?"
+                ],
+                "content": "E voce filha?",
+                "timestamp": "2026-03-07T15:05:03"
+              }
+            },
+            {
+              "id": "m-d47ba726-58b8-421c-a220-a6e4117350cc",
+              "role": "model",
+              "authorId": "model",
+              "parts": [
+                "Ainda não terminei a lição de hoje"
+              ],
+              "content": "Ainda não terminei a lição de hoje",
+              "timestamp": "2026-03-07T15:05:10"
+            },
+            {
+              "id": "m-49f3dca3-cf66-4461-80b2-3b80ed0593b9",
+              "role": "model",
+              "authorId": "model",
+              "parts": [
+                "Estava pensando em sair um pouco para dar uma caminhada ao ar livre"
+              ],
+              "content": "Estava pensando em sair um pouco para dar uma caminhada ao ar livre",
+              "timestamp": "2026-03-07T15:05:10"
+            },
+            {
+              "id": "m-62e58d06-d75d-4e2f-b4be-93928f5bb07a",
+              "role": "model",
+              "authorId": "model",
+              "parts": [
+                "Então, qual série você está assistindo?"
+              ],
+              "content": "Então, qual série você está assistindo?",
+              "timestamp": "2026-03-07T15:07:25"
+            },
+            {
+              "id": "m-18282609-3156-4248-aff0-e7b62aa43dae",
+              "role": "model",
+              "authorId": "model",
+              "parts": [
+                "Não é mais aquele show que eu estava te recomendando?"
+              ],
+              "content": "Não é mais aquele show que eu estava te recomendando?",
+              "timestamp": "2026-03-07T15:07:25"
+            },
+            {
+              "id": "m-f7fc71c1-f063-4e76-ac7b-9f8c1adb06d7",
+              "role": "model",
+              "authorId": "model",
+              "parts": [
+                "Pai?"
+              ],
+              "content": "Pai?",
+              "timestamp": "2026-03-07T15:07:46"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "profiles": {
+    "user": {
+      "name": "Mateus",
+      "id_tag": "#1987",
+      "avatar": "assets/avatars/sam.png"
+    },
+    "model": {
+      "name": "Lou",
+      "id_tag": "#AI",
+      "avatar": "assets/avatars/lou.png"
+    }
+  }
+}

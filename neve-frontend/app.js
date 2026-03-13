@@ -1,0 +1,3181 @@
+const API_BASE = "/api";
+let profiles = {};
+
+const state = {
+  servers: [],
+  activeServerId: null,
+  activeChannelId: null,
+  isLoading: true,
+};
+
+const elements = {
+  serverRail: document.querySelector("[data-role=server-rail]"),
+  channelList: document.querySelector("[data-role=channel-list]"),
+  messageList: document.querySelector("[data-role=message-list]"),
+  emptyState: document.querySelector("[data-role=empty-state]"),
+  channelCreateButton: document.querySelector("[data-role=create-channel]"),
+  userAvatar: document.querySelector("[data-bind=user-avatar]"),
+  userName: document.querySelector("[data-bind=user-name]"),
+  messageForm: document.getElementById("message-form"),
+  messageInput: document.getElementById("message-input"),
+  serverSettingsButton: document.querySelector("[data-role=server-settings]"),
+  profileSettingsButton: document.querySelector("[data-role=profile-settings]"),
+  modalRoot: document.querySelector("[data-role=modal-root]"),
+  replyIndicator: document.querySelector("[data-role=reply-indicator]"),
+  replyAuthor: document.querySelector("[data-role=reply-author]"),
+  replySnippet: document.querySelector("[data-role=reply-snippet]"),
+  replyAvatar: document.querySelector("[data-role=reply-avatar]"),
+  replyCancel: document.querySelector("[data-role=reply-cancel]"),
+  aiAvailability: document.querySelector("[data-role=ai-availability]"),
+  aiAvailabilityLabel: document.querySelector("[data-role=ai-availability-label]"),
+  personalityButton: document.querySelector("[data-role=personality-editor]"),
+  personalityOverlay: document.querySelector("[data-role=personality-overlay]"),
+  personalityPanel: document.querySelector("[data-role=personality-panel]"),
+  personalityCategoryList: document.querySelector("[data-role=personality-category-list]"),
+  personalityFields: document.querySelector("[data-role=personality-fields]"),
+  personalityEmpty: document.querySelector("[data-role=personality-empty]"),
+  personalityStatus: document.querySelector("[data-role=personality-status]"),
+  personalitySave: document.querySelector("[data-role=personality-save]"),
+  personalityCancel: document.querySelector("[data-role=personality-cancel]"),
+  personalityClose: document.querySelector("[data-role=personality-close]"),
+  contextToggle: document.querySelector("[data-role=context-toggle]"),
+  contextOverlay: document.querySelector("[data-role=context-overlay]"),
+  contextPanel: document.querySelector("[data-role=context-panel]"),
+  contextClose: document.querySelector("[data-role=context-close]"),
+  contextStatus: document.querySelector("[data-role=context-status]"),
+  contextListLong: document.querySelector("[data-role=context-list-long]"),
+  proactiveTrigger: document.querySelector("[data-role=proactive-trigger]"),
+  availabilityToggle: document.querySelector("[data-role=availability-toggle]"),
+  availabilityToggleLabel: document.querySelector("[data-role=availability-toggle-label]"),
+  availabilityToggleDot: document.querySelector("[data-role=availability-toggle-dot]"),
+  gifButton: document.querySelector("[data-role=gif-button]"),
+  gifOverlay: document.querySelector("[data-role=gif-overlay]"),
+  gifPanel: document.querySelector("[data-role=gif-panel]"),
+  gifClose: document.querySelector("[data-role=gif-close]"),
+  gifUpload: document.querySelector("[data-role=gif-upload]"),
+  gifStatus: document.querySelector("[data-role=gif-status]"),
+  gifList: document.querySelector("[data-role=gif-list]"),
+  gifSearch: document.querySelector("[data-role=gif-search]"),
+  gifFileInput: document.querySelector("[data-role=gif-file-input]"),
+  llmSettingsButton: document.querySelector("[data-role=llm-settings-button]"),
+  llmOverlay: document.querySelector("[data-role=llm-overlay]"),
+  llmPanel: document.querySelector("[data-role=llm-panel]"),
+  llmClose: document.querySelector("[data-role=llm-close]"),
+  llmStatusDot: document.querySelector("[data-role=llm-status-dot]"),
+  llmStatusText: document.querySelector("[data-role=llm-status-text]"),
+  llmModelSelect: document.querySelector("[data-role=llm-model-select]"),
+  llmNCtx: document.querySelector("[data-role=llm-n-ctx]"),
+  llmNThreads: document.querySelector("[data-role=llm-n-threads]"),
+  llmNGpuLayers: document.querySelector("[data-role=llm-n-gpu-layers]"),
+  llmTemperature: document.querySelector("[data-role=llm-temperature]"),
+  llmMaxTokens: document.querySelector("[data-role=llm-max-tokens]"),
+  llmRepeatPenalty: document.querySelector("[data-role=llm-repeat-penalty]"),
+  llmTopP: document.querySelector("[data-role=llm-top-p]"),
+  llmTopK: document.querySelector("[data-role=llm-top-k]"),
+  llmLoad: document.querySelector("[data-role=llm-load]"),
+  llmUnload: document.querySelector("[data-role=llm-unload]"),
+  llmFooterStatus: document.querySelector("[data-role=llm-footer-status]"),
+};
+
+const bindings = {
+  serverName: document.querySelectorAll('[data-bind="server-name"]'),
+  channelName: document.querySelectorAll('[data-bind="channel-name"]'),
+  channelTopic: document.querySelectorAll('[data-bind="channel-topic"]'),
+};
+
+const modalState = {
+  node: null,
+  escHandler: null,
+};
+
+const replyState = {
+  serverId: null,
+  channelId: null,
+  message: null,
+};
+
+const personalityState = {
+  data: null,
+  draft: null,
+  activeCategory: null,
+  isLoading: false,
+  isSaving: false,
+  hasUnsavedChanges: false,
+};
+
+const contextState = {
+  snapshot: { long_term: [] },
+  isLoading: false,
+  isOpen: false,
+  hasLoaded: false,
+};
+
+let channelLimitMeasureFrame = null;
+
+const MAX_TEXT_CHANNELS = 8;
+
+
+const PERSONALITY_LABEL_OVERRIDES = {
+  IdentificacaoGeral: "Identificação Geral",
+  AparenciaFisicaEstilo: "Aparência Física e Estilo",
+  TraitsPersonalidade: "Traços de Personalidade",
+  PsicologiaProfunda: "Psicologia Profunda",
+  InteligenciaProcessamentoCognitivo: "Perfil Cognitivo",
+  ComportamentoSocial: "Comportamento Social",
+  Comunicacao: "Comunicação",
+  ValoresEMoral: "Valores e Crenças",
+  EstiloDeVida: "Rotina Psicossocial",
+  RelacoesEAfetos: "Relações e Afeto",
+  EmocoesEReacoes: "Perfil Emocional",
+  HistoricoEExperiencias: "Experiências de Desenvolvimento",
+  ObjetivosEProjecaoFutura: "Projeção de Vida",
+  "FamiliaELaçosFamiliares": "Estrutura Familiar",
+  Alimentacao: "Alimentação",
+  Altura: "Altura",
+  Apelidos: "Apelidos",
+  ApelidosPai: "Apelidos do Pai",
+  AssuntosQueEvitam: "Assuntos que Evitam",
+  AtencaoFoco: "Atenção e Foco",
+  Autoconfianca: "Autoconfiança",
+  CapacidadeMemorizacao: "Capacidade de Memorização",
+  CapacidadeNegociar: "Capacidade de Negociar",
+  CausaOuIdeal: "Causa ou Ideal",
+  ClasseSocialPercebida: "Classe Social Percebida",
+  ComQuemMora: "Com quem Mora",
+  ComoDesejaSerLembrado: "Como Deseja Ser Lembrada",
+  ComposicaoFamiliarAtual: "Composição Familiar Atual",
+  ConfiancaEmPessoas: "Confiança em Pessoas",
+  ControleEmocional: "Controle Emocional",
+  CorOlhos: "Cor dos Olhos",
+  CorTipoCabelo: "Cor e Tipo de Cabelo",
+  CostumesFamiliaresMantidos: "Costumes Familiares Mantidos",
+  "CrençasCentraisSobreSiMesmo": "Crenças Centrais sobre Si Mesma",
+  "CrençasSobreOMundo": "Crenças sobre o Mundo",
+  "CrençasSobreOutrasPessoas": "Crenças sobre Outras Pessoas",
+  DataNascimento: "Data de Nascimento",
+  DefeitosPrincipais: "Defeitos Principais",
+  DesejosMaisProfundos: "Desejos Mais Profundos",
+  EmocaoMaisFrequente: "Emoção Mais Frequente",
+  EstiloVestimenta: "Estilo de Vestimenta",
+  EstrategiasDeEnfrentamento: "Estratégias de Enfrentamento",
+  EventosFamiliaresMarcantesNegativos: "Eventos Familiares Marcantes (Negativos)",
+  EventosFamiliaresMarcantesPositivos: "Eventos Familiares Marcantes (Positivos)",
+  EventosMarcantesAdolescencia: "Eventos Marcantes da Adolescência",
+  EventosMarcantesInfancia: "Eventos Marcantes da Infância",
+  EventosMarcantesVidaAdulta: "Eventos Marcantes da Vida Adulta",
+  ExpectativasFamiliares: "Expectativas Familiares",
+  ExpectativasRelacionamentos: "Expectativas em Relacionamentos",
+  Expressividade: "Expressividade",
+  ExpressoesFaciaisComuns: "Expressões Faciais Comuns",
+  FlexibilidadeMental: "Flexibilidade Mental",
+  FormaDeAprenderMelhor: "Forma de Aprender Melhor",
+  FormaDeContarHistorias: "Forma de Contar Histórias",
+  FormaDeSeExpressarMelhor: "Forma de se Expressar Melhor",
+  FormaDemonstrarAfeto: "Forma de Demonstrar Afeto",
+  FormaLidarConflitos: "Forma de Lidar com Conflitos",
+  FormaLidarTerminoAfastamento: "Forma de Lidar com Términos/Afastamentos",
+  FormaSeApresentarEstranhos: "Como se Apresenta a Estranhos",
+  FormasDeSeAcalmar: "Formas de se Acalmar",
+  GatilhosEmocionais: "Gatilhos Emocionais",
+  Genero: "Gênero",
+  GestosCaracteristicos: "Gestos Característicos",
+  HabilidadesAnaliticas: "Habilidades Analíticas",
+  HerancaCulturalTradicoesFamiliares: "Herança Cultural e Tradições Familiares",
+  HigienePessoal: "Higiene Pessoal",
+  HistoriasNarrativasFamiliaresImportantes: "Histórias Familiares Importantes",
+  HistoricoAmizadesAmoresImportantes: "Histórico de Amizades e Amores Importantes",
+  HobbiesPassatempos: "Hobbies e Passatempos",
+  HorarioMaiorEnergia: "Horário de Maior Energia",
+  IdadeReal: "Idade Real",
+  InfluenciasFamiliaresNasEscolhas: "Influências Familiares nas Escolhas",
+  Insegurancas: "Inseguranças",
+  InteressesCulinarios: "Interesses Culinários",
+  LimitesPessoais: "Limites Pessoais",
+  LinguagemCorporalPredominante: "Linguagem Corporal Predominante",
+  LocalNascimento: "Local de Nascimento",
+  LocalResidenciaAtual: "Local de Residência Atual",
+  MarcasCicatrizes: "Marcas e Cicatrizes",
+  MecanismosDeDefesa: "Mecanismos de Defesa",
+  MedosFuturo: "Medos em Relação ao Futuro",
+  MedosPrincipais: "Medos Principais",
+  MetasCurtoPrazo: "Metas de Curto Prazo",
+  MetasLongoPrazo: "Metas de Longo Prazo",
+  MomentosMudaramFormaDePensar: "Momentos que Mudaram sua Forma de Pensar",
+  Nacionalidade: "Nacionalidade",
+  NecessidadeAprovacao: "Necessidade de Aprovação",
+  NivelAtividadeFisica: "Nível de Atividade Física",
+  NivelCiumes: "Nível de Ciúmes",
+  NivelCuriosidade: "Nível de Curiosidade",
+  NivelEmpatia: "Nível de Empatia",
+  NivelExtroversaoIntroversao: "Nível de Extroversão/Introversão",
+  NivelImpulsividade: "Nível de Impulsividade",
+  NivelOtimismoPessimismo: "Nível de Otimismo/Pessimismo",
+  NivelReligiosidadeEspiritualidade: "Nível de Religiosidade/Espiritualidade",
+  NivelSinceridadeDiplomacia: "Nível de Sinceridade/Diplomacia",
+  NivelSociabilidade: "Nível de Sociabilidade",
+  NomeCompleto: "Nome Completo",
+  NomeCompletoPai: "Nome Completo do Pai",
+  ObjetivosDeVida: "Objetivos de Vida",
+  Ocupacao: "Ocupação",
+  PadroesDePensamentoRecorrentes: "Padrões de Pensamento Recorrentes",
+  PapelComunEmGrupos: "Papel Comum em Grupos",
+  PapelNaFamilia: "Papel na Família",
+  Peso: "Peso",
+  PlanosParaSuperar: "Planos para Superar",
+  PosicionamentoPolitico: "Posicionamento Político",
+  PosturaAndar: "Postura e Maneira de Andar",
+  PreferenciaTrabalhoGrupoOuSozinho: "Preferência por Trabalho em Grupo ou Sozinha",
+  PreferenciasDeLazer: "Preferências de Lazer",
+  PreferenciasDeLeitura: "Preferências de Leitura",
+  PreferenciasMusicais: "Preferências Musicais",
+  PresencaFigMentorasInspiradoras: "Presença de Figuras Mentoras/Inspiradoras",
+  PrincipaisConquistas: "Principais Conquistas",
+  PrincipaisPerdas: "Principais Perdas",
+  PrincipiosInegociaveis: "Princípios Inegociáveis",
+  PronomePreferido: "Pronome Preferido",
+  QualidadesPrincipais: "Qualidades Principais",
+  ReacaoAoFracasso: "Reação ao Fracasso",
+  ReacaoAoSucesso: "Reação ao Sucesso",
+  ReacaoCriticas: "Reação a Críticas",
+  ReacaoElogios: "Reação a Elogios",
+  ReacaoSobPressao: "Reação sob Pressão",
+  RegrasProprias: "Regras Próprias",
+  RelacaoComIrmaos: "Relação com Irmãos",
+  RelacaoComMae: "Relação com a Mãe",
+  RelacaoComPai: "Relação com o Pai",
+  RelacaoComTecnologia: "Relação com a Tecnologia",
+  RotinaDiaria: "Rotina Diária",
+  SensoDeHumor: "Senso de Humor",
+  SituacoesGeramAnsiedade: "Situações que Geram Ansiedade",
+  SituacoesGeramCalma: "Situações que Geram Calma",
+  TendenciaGuardarExpressarEmocoes: "Tendência a Guardar ou Expressar Emoções",
+  TipoCorpo: "Tipo de Corpo",
+  TipoInteligenciaPredominante: "Tipo de Inteligência Predominante",
+  TipoVinculoMaisValoriza: "Tipo de Vínculo que Mais Valoriza",
+  ToleranciaEstresse: "Tolerância ao Estresse",
+  TomDeVoz: "Tom de Voz",
+  TomPele: "Tom de Pele",
+  TranstornosCondicoesMentais: "Transtornos ou Condições Mentais",
+  TraumasPassados: "Traumas Passados",
+  UsoDeGirias: "Uso de Gírias",
+  VelocidadeAoFalar: "Velocidade ao Falar",
+  VelocidadeRaciocinio: "Velocidade de Raciocínio",
+  ViagensExperienciasMarcantes: "Viagens e Experiências Marcantes",
+  VisaoSobreCertoErrado: "Visão sobre Certo e Errado",
+  VisaoSobreJustica: "Visão sobre Justiça",
+  Vocabulario: "Vocabulário",
+};
+
+function normalizeIntentText(text) {
+  if (!text) return "";
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[!?.,;:()/]+/g, " ")
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .trim();
+}
+
+function containsAny(text, tokens) {
+  if (!text || !Array.isArray(tokens)) return false;
+  return tokens.some((token) => token && text.includes(token));
+}
+
+const gifState = {
+  gifs: [],
+  filtered: [],
+  isOpen: false,
+  isLoading: false,
+  hasLoaded: false,
+  filter: "",
+  isUploading: false,
+};
+
+const PROACTIVE_PROFILES = {
+  normal: {
+    proactiveWindow: { min: 60000, max: 300000 },
+    absenceWindow: { min: 10000, max: 30000 },
+    maxProactives: 1,
+  },
+};
+const PROACTIVE_RETRY_DELAYS_MS = [4000, 8000];
+const proactiveState = {
+  timerId: null,
+  attempt: 0,
+  lastUserActivity: 0,
+  requestInFlight: false,
+  proactiveMessagesSent: 0,
+  absenceQuestionSent: false,
+  awaitingUserResponse: false,
+  retryTimerId: null,
+  retryAttempt: 0,
+  pendingRetryKind: null,
+  lastLouMessageAt: 0,
+  lastProactiveAt: 0,
+};
+const louReplyState = {
+  timerId: null,
+  serverId: null,
+  channelId: null,
+  referenceMessage: null,
+  debounceRange: { min: 5000, max: 7000 },
+  generationToken: 0,
+  abortController: null,
+  outputController: null,
+};
+const AVAILABILITY_STATUS_META = {
+  available: {
+    label: "Disponível",
+    toggleLabel: "Mudar para Ausente",
+    cycleRange: { min: 60000, max: 600000 },
+    responseLag: { min: 0, max: 1200 },
+    typingLag: { min: 0, max: 600 },
+  },
+  away: {
+    label: "Ausente",
+    toggleLabel: "Mudar para Disponível",
+    cycleRange: { min: 120000, max: 600000 },
+    responseLag: { min: 3500, max: 7000 },
+    typingLag: { min: 1500, max: 3200 },
+  },
+};
+const AVAILABILITY_SHORT_CYCLE_RANGE = { min: 30000, max: 60000 };
+const AVAILABILITY_SHORT_CYCLE_EXPIRY_MS = 10 * 60 * 1000;
+const MANUAL_AWAY_DURATION_MS = { min: 120000, max: 600000 };
+const AVAILABILITY_RETURN_COOLDOWN_MS = 5000;
+const availabilityState = {
+  status: "available",
+  timerId: null,
+  manualDowntimeTimerId: null,
+  isManualDowntimeActive: false,
+  pendingLouReply: null,
+  cooldownUntil: 0,
+  pendingShortCycle: false,
+  lastUserMessageAt: 0,
+  returnFromAwayTimerId: null,
+  lastAutoAwayAt: 0,
+  lastAbsenceQuestionAt: 0,
+};
+const LOU_TYPING_INITIAL_DELAY = { min: 400, max: 900 };
+const LOU_TYPING_CHAR_INTERVAL_MS = 35;
+const LOU_TYPING_MIN_DURATION_MS = 500;
+const LOU_TYPING_MAX_DURATION_MS = 4000;
+const LOU_TYPING_BETWEEN_DELAY = { min: 200, max: 600 };
+
+function syncOverlayPresence() {
+  const overlays = [
+    elements.contextOverlay,
+    elements.gifOverlay,
+    elements.personalityOverlay,
+    elements.llmOverlay,
+  ];
+  const hasVisibleOverlay =
+    overlays.some((node) => node && !node.classList.contains("is-hidden")) || Boolean(modalState.node);
+  if (document.body) {
+    document.body.classList.toggle("has-overlay", hasVisibleOverlay);
+  }
+}
+
+function setBinding(bindingNodes, value) {
+  bindingNodes.forEach((node) => {
+    node.textContent = value;
+  });
+}
+
+function getActiveServer() {
+  return state.servers.find((server) => server.id === state.activeServerId) ?? null;
+}
+
+function getActiveChannel() {
+  const server = getActiveServer();
+  if (!server) return null;
+  return server.channels.find((channel) => channel.id === state.activeChannelId) ?? null;
+}
+
+function renderServers() {
+  const rail = elements.serverRail;
+  if (!rail) return;
+  if (!rail) return;
+  rail.innerHTML = "";
+  const server = state.servers[0];
+  if (!server) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = server.shortName ?? server.name.slice(0, 2).toUpperCase();
+  button.classList.add("active");
+  button.title = server.name;
+  button.addEventListener("click", () => {
+    if (state.activeServerId === server.id) return;
+    state.activeServerId = server.id;
+    state.activeChannelId = server.channels[0]?.id ?? null;
+    renderChannels();
+    renderChatArea();
+      refreshProactiveWatcher({ resetAttempts: true, resetAnchors: true, silent: true });
+  });
+  rail.appendChild(button);
+}
+
+function renderChannels() {
+  const server = getActiveServer();
+  setBinding(bindings.serverName, server?.name ?? "Grupo fixo");
+
+  const list = elements.channelList;
+  list.innerHTML = "";
+  if (!server) {
+    scheduleChannelLimitCheck(null);
+    return;
+  }
+
+  server.channels.forEach((channel) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "channel-button";
+    button.dataset.channelId = channel.id;
+    if (channel.id === state.activeChannelId) button.classList.add("active");
+    button.innerHTML = `
+      <span class="channel-label">
+        <span class="channel-badge">@</span>
+        <span class="channel-name-text">${escapeHTML(channel.name)}</span>
+      </span>
+      <span class="channel-action-bar" aria-label="Ações do canal">
+        <span class="channel-action" role="button" tabindex="0" data-channel-action="rename" title="Renomear canal">
+          <i class="fas fa-pen-to-square" aria-hidden="true"></i>
+        </span>
+        <span class="channel-action" role="button" tabindex="0" data-channel-action="delete" title="Excluir canal">
+          <i class="fas fa-trash" aria-hidden="true"></i>
+        </span>
+      </span>
+    `;
+    list.appendChild(button);
+  });
+
+  scheduleChannelLimitCheck(server);
+}
+
+function scheduleChannelLimitCheck(server) {
+  if (typeof window === "undefined" || !window.requestAnimationFrame) {
+    updateChannelCreationAvailability(server);
+    return;
+  }
+  if (channelLimitMeasureFrame) {
+    window.cancelAnimationFrame(channelLimitMeasureFrame);
+  }
+  channelLimitMeasureFrame = window.requestAnimationFrame(() => {
+    channelLimitMeasureFrame = null;
+    updateChannelCreationAvailability(server);
+  });
+}
+
+function updateChannelCreationAvailability(server) {
+  const button = elements.channelCreateButton;
+  if (!button) return;
+  if (!server) {
+    button.disabled = true;
+    button.title = "Selecione um servidor para criar canais";
+    return;
+  }
+  const list = elements.channelList;
+  if (!list) return;
+  const maxChannelsReached =
+    Array.isArray(server.channels) && server.channels.length >= MAX_TEXT_CHANNELS;
+  const ranOutOfSpace = list.scrollHeight > list.clientHeight + 2;
+  const reachedLimit = maxChannelsReached || ranOutOfSpace;
+  button.disabled = reachedLimit;
+  button.title = reachedLimit
+    ? maxChannelsReached
+  ? `Limite de ${MAX_TEXT_CHANNELS} chats atingido. Exclua um canal para liberar espaço.`
+      : "Espaço esgotado. Exclua um canal para liberar espaço."
+    : "Criar canal";
+}
+
+
+function renderChatArea() {
+  const channel = getActiveChannel();
+  if (!channel || channel.id !== replyState.channelId) {
+    clearReplyTarget();
+  }
+  const channelHandle = channel ? formatChannelHandle(channel.name) : null;
+  setBinding(bindings.channelName, channel ? channelHandle : "Selecione um canal");
+  setBinding(bindings.channelTopic, channel?.topic ?? "");
+  updateComposerPlaceholders(channel);
+  renderMessages();
+}
+
+function escapeHTML(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function formatChannelHandle(name) {
+  const cleaned = (name || "").replace(/^[@#]+/, "").trim();
+  return cleaned ? `@ ${cleaned}` : "@ canal";
+}
+
+function updateComposerPlaceholders(channel) {
+  const handle = channel ? formatChannelHandle(channel.name) : null;
+  const mainPlaceholder = channel ? `Conversar em ${handle}` : "Selecione um canal";
+  if (elements.messageInput) {
+    elements.messageInput.placeholder = mainPlaceholder;
+  }
+}
+
+function renderMessages() {
+  const channel = getActiveChannel();
+  const container = elements.messageList;
+  container.innerHTML = "";
+  if (state.isLoading) {
+    showEmptyState("Carregando", "Buscando dados no backend local...");
+    return;
+  }
+  if (!channel) {
+  showEmptyState("Nenhum chat selecionado", "Crie um chat para iniciar a conversa.");
+    return;
+  }
+
+  let lastDayLabel = "";
+  if (channel.messages.length === 0) {
+  showEmptyState("Sem histórico", "Envie uma mensagem para iniciar a conversa.");
+    return;
+  }
+
+  hideEmptyState();
+  channel.messages.forEach((message) => {
+    const currentDayLabel = formatDay(message.timestamp);
+    if (currentDayLabel !== lastDayLabel) {
+      const dayDivider = document.createElement("p");
+      dayDivider.className = "day-separator";
+      dayDivider.textContent = currentDayLabel;
+      container.appendChild(dayDivider);
+      lastDayLabel = currentDayLabel;
+    }
+    container.appendChild(createMessageNode(message, channel.messages));
+  });
+  container.scrollTop = container.scrollHeight;
+}
+
+function randomBetween(min, max) {
+  const lower = Math.min(min, max);
+  const upper = Math.max(min, max);
+  return Math.floor(Math.random() * (upper - lower + 1)) + lower;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
+function getMessageTextContent(message) {
+  if (!message) return "";
+  if (Array.isArray(message.parts) && message.parts.length) {
+    return message.parts
+      .filter((part) => typeof part === "string")
+      .join(" ")
+      .trim();
+  }
+  if (typeof message.content === "string") {
+    return message.content.trim();
+  }
+  return "";
+}
+
+function estimateLouTypingDurationMs(message) {
+  const text = getMessageTextContent(message);
+  const length = text.length;
+  if (!length) {
+    return LOU_TYPING_MIN_DURATION_MS;
+  }
+  const raw = length * LOU_TYPING_CHAR_INTERVAL_MS;
+  return Math.min(
+    Math.max(raw, LOU_TYPING_MIN_DURATION_MS),
+    LOU_TYPING_MAX_DURATION_MS
+  );
+}
+
+function getAvailabilityConfig(status) {
+  return AVAILABILITY_STATUS_META[status] ?? AVAILABILITY_STATUS_META.available;
+}
+
+function initAiAvailability() {
+  setAiAvailability(availabilityState.status, { source: "init" });
+}
+
+function setAiAvailability(nextStatus, options = {}) {
+  const source = options.source || "system";
+  let normalized = AVAILABILITY_STATUS_META[nextStatus] ? nextStatus : "available";
+  const previousStatus = availabilityState.status;
+
+  if (!options.preserveTimer) {
+    clearAvailabilityShiftTimer();
+  }
+  clearReturnFromAwayTimer();
+  availabilityState.status = normalized;
+  if (normalized === "available" && previousStatus === "away") {
+    availabilityState.cooldownUntil = Date.now() + AVAILABILITY_RETURN_COOLDOWN_MS;
+  }
+  if (normalized === "away") {
+    availabilityState.cooldownUntil = 0;
+    if (source !== "manual") {
+      availabilityState.lastAutoAwayAt = Date.now();
+    }
+  }
+  updateAiAvailabilityUi();
+  if (normalized === "available") {
+    dispatchPendingLouReply();
+  }
+  let shouldScheduleNextShift = !options.skipSchedule;
+  if (normalized === "available" && source === "user_message") {
+    shouldScheduleNextShift = false;
+  }
+  if (normalized === "available" && source === "auto_cycle") {
+    const scheduled = scheduleAwayAfterSilentAutoReturn();
+    if (scheduled) {
+      shouldScheduleNextShift = false;
+    }
+  }
+  if (shouldScheduleNextShift) {
+    scheduleAvailabilityShift();
+  }
+}
+
+function updateAiAvailabilityUi() {
+  const indicator = elements.aiAvailability;
+  const labelNode = elements.aiAvailabilityLabel;
+  const toggleLabelNode = elements.availabilityToggleLabel;
+  const toggleButton = elements.availabilityToggle;
+  const toggleDot = elements.availabilityToggleDot;
+  const config = getAvailabilityConfig(availabilityState.status);
+  if (indicator) {
+    indicator.setAttribute("data-status", availabilityState.status);
+  }
+  if (toggleButton) {
+    toggleButton.setAttribute("data-status", availabilityState.status);
+  }
+  if (toggleDot) {
+    toggleDot.setAttribute("data-status", availabilityState.status);
+  }
+  if (labelNode) {
+    labelNode.textContent = config.label;
+  }
+  if (toggleLabelNode) {
+    toggleLabelNode.textContent = config.toggleLabel;
+  }
+}
+
+function scheduleAvailabilityShift(options = {}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  clearAvailabilityShiftTimer();
+  const { overrideRange, forceNextStatus, reason } = options;
+  const config = getAvailabilityConfig(availabilityState.status);
+  const useOverrideRange = Boolean(overrideRange);
+  if (useOverrideRange) {
+    availabilityState.pendingShortCycle = false;
+  }
+  let range = overrideRange || config.cycleRange || { min: 60000, max: 120000 };
+  if (!useOverrideRange && availabilityState.status === "available" && availabilityState.pendingShortCycle) {
+    const hasRecentUserMessage =
+      availabilityState.lastUserMessageAt &&
+      Date.now() - availabilityState.lastUserMessageAt <= AVAILABILITY_SHORT_CYCLE_EXPIRY_MS;
+    if (hasRecentUserMessage) {
+      range = AVAILABILITY_SHORT_CYCLE_RANGE;
+    }
+    availabilityState.pendingShortCycle = false;
+  }
+  const wait = randomBetween(range.min || 60000, range.max || range.min || 120000);
+  availabilityState.timerId = window.setTimeout(() => {
+    availabilityState.timerId = null;
+    const targetStatus =
+      forceNextStatus || (availabilityState.status === "available" ? "away" : "available");
+    if (targetStatus === availabilityState.status) {
+      return;
+    }
+    const nextSource = reason || "auto_cycle";
+    setAiAvailability(targetStatus, { source: nextSource });
+  }, wait);
+}
+
+function shouldUseNormalChatAvailability() {
+  return true;
+}
+
+function scheduleAwayAfterSilentAutoReturn() {
+  if (!shouldUseNormalChatAvailability()) {
+    return false;
+  }
+  if (availabilityState.status !== "available") {
+    return false;
+  }
+  if (!availabilityState.lastAutoAwayAt) {
+    return false;
+  }
+  const userAnsweredSinceAway =
+    availabilityState.lastUserMessageAt &&
+    availabilityState.lastUserMessageAt > availabilityState.lastAutoAwayAt;
+  if (userAnsweredSinceAway) {
+    return false;
+  }
+  scheduleAvailabilityShift({
+    overrideRange: AVAILABILITY_SHORT_CYCLE_RANGE,
+    forceNextStatus: "away",
+    reason: "auto_return",
+  });
+  return true;
+}
+
+function scheduleAwayAfterAbsenceQuestion() {
+
+  if (!shouldUseNormalChatAvailability()) {
+    return;
+  }
+  if (availabilityState.status !== "available") {
+    return;
+  }
+  availabilityState.lastAbsenceQuestionAt = Date.now();
+  scheduleAvailabilityShift({
+    overrideRange: AVAILABILITY_SHORT_CYCLE_RANGE,
+    forceNextStatus: "away",
+    reason: "absence_question",
+  });
+}
+
+function handleAvailabilityToggleClick() {
+  if (availabilityState.status === "available") {
+    beginManualDowntimeWindow();
+    return;
+  }
+  endManualDowntimeWindow();
+}
+
+function clearAvailabilityShiftTimer() {
+  if (typeof window === "undefined") {
+    availabilityState.timerId = null;
+    return;
+  }
+  if (availabilityState.timerId) {
+    window.clearTimeout(availabilityState.timerId);
+    availabilityState.timerId = null;
+  }
+}
+
+function clearReturnFromAwayTimer() {
+  if (typeof window === "undefined") {
+    availabilityState.returnFromAwayTimerId = null;
+    return;
+  }
+  if (availabilityState.returnFromAwayTimerId) {
+    window.clearTimeout(availabilityState.returnFromAwayTimerId);
+    availabilityState.returnFromAwayTimerId = null;
+  }
+}
+
+function scheduleReturnToAvailableAfterUserMessage() {
+  if (typeof window === "undefined") {
+    return;
+  }
+  clearReturnFromAwayTimer();
+  const wait = randomBetween(
+    AVAILABILITY_SHORT_CYCLE_RANGE.min,
+    AVAILABILITY_SHORT_CYCLE_RANGE.max
+  );
+  availabilityState.returnFromAwayTimerId = window.setTimeout(() => {
+    availabilityState.returnFromAwayTimerId = null;
+    setAiAvailability("available", { source: "user_message" });
+  }, wait);
+}
+
+function beginManualDowntimeWindow() {
+  if (typeof window === "undefined" || availabilityState.isManualDowntimeActive) {
+    return;
+  }
+  availabilityState.isManualDowntimeActive = true;
+  updateAiAvailabilityUi();
+  captureActiveLouReplyForLater();
+  setAiAvailability("away", { skipSchedule: true, source: "manual" });
+  const wait = randomBetween(MANUAL_AWAY_DURATION_MS.min, MANUAL_AWAY_DURATION_MS.max);
+  if (availabilityState.manualDowntimeTimerId) {
+    window.clearTimeout(availabilityState.manualDowntimeTimerId);
+  }
+  availabilityState.manualDowntimeTimerId = window.setTimeout(() => {
+    availabilityState.manualDowntimeTimerId = null;
+    availabilityState.isManualDowntimeActive = false;
+    updateAiAvailabilityUi();
+    setAiAvailability("available", { source: "manual" });
+  }, wait);
+}
+
+function endManualDowntimeWindow() {
+  if (typeof window !== "undefined" && availabilityState.manualDowntimeTimerId) {
+    window.clearTimeout(availabilityState.manualDowntimeTimerId);
+    availabilityState.manualDowntimeTimerId = null;
+  }
+  if (availabilityState.isManualDowntimeActive) {
+    availabilityState.isManualDowntimeActive = false;
+    updateAiAvailabilityUi();
+  }
+  setAiAvailability("available", { source: "manual" });
+}
+
+function captureActiveLouReplyForLater() {
+  if (!louReplyState.referenceMessage || !louReplyState.serverId || !louReplyState.channelId) {
+    return;
+  }
+  availabilityState.pendingLouReply = {
+    serverId: louReplyState.serverId,
+    channelId: louReplyState.channelId,
+    referenceMessage: louReplyState.referenceMessage,
+  };
+  cancelLouReplyTimer();
+  cancelLouReplyRequest();
+  interruptLouOutput();
+}
+
+function dispatchPendingLouReply() {
+  if (!availabilityState.pendingLouReply) {
+    return;
+  }
+  const payload = availabilityState.pendingLouReply;
+  availabilityState.pendingLouReply = null;
+  scheduleLouReplyCountdown(payload);
+}
+
+function getAvailabilityCooldownDelay() {
+  if (!availabilityState.cooldownUntil) {
+    return 0;
+  }
+  return Math.max(0, availabilityState.cooldownUntil - Date.now());
+}
+
+function getAvailabilityResponseLag() {
+  const config = getAvailabilityConfig(availabilityState.status);
+  const range = config.responseLag;
+  const baseLag = range ? randomBetween(range.min || 0, range.max || range.min || 0) : 0;
+  return Math.max(0, baseLag + getAvailabilityCooldownDelay());
+}
+
+function getAvailabilityTypingLag() {
+  const config = getAvailabilityConfig(availabilityState.status);
+  const range = config.typingLag;
+  if (!range) return 0;
+  return Math.max(0, randomBetween(range.min || 0, range.max || range.min || 0));
+}
+
+function createLouOutputController() {
+  return {
+    cancelled: false,
+    listeners: [],
+    cancel() {
+      if (this.cancelled) return;
+      this.cancelled = true;
+      this.listeners.forEach((listener) => listener());
+      this.listeners = [];
+    },
+    onCancel(callback) {
+      if (this.cancelled) {
+        callback();
+        return () => {};
+      }
+      this.listeners.push(callback);
+      return () => {
+        this.listeners = this.listeners.filter((listener) => listener !== callback);
+      };
+    },
+  };
+}
+
+async function waitForController(ms, controller) {
+  if (!controller) {
+    await delay(ms);
+    return true;
+  }
+  if (controller.cancelled) {
+    return false;
+  }
+  return new Promise((resolve) => {
+    const timeoutId = window.setTimeout(() => {
+      cleanup();
+      resolve(!controller.cancelled);
+    }, Math.max(0, ms));
+    const cancelHandler = () => {
+      window.clearTimeout(timeoutId);
+      cleanup();
+      resolve(false);
+    };
+    const cleanup = controller.onCancel(cancelHandler);
+  });
+}
+
+function createMessageNode(message, channelMessages) {
+  const profile = profiles[message.authorId] ?? profiles.model ?? {
+    name: "Desconhecido",
+    initials: "??",
+  };
+  const row = document.createElement("article");
+  row.className = "message-row";
+  if (message.authorId === "user") {
+    row.classList.add("is-user");
+  } else if (message.authorId === "model") {
+    row.classList.add("is-ai");
+  }
+  row.dataset.messageAuthor = message.authorId || "unknown";
+  row.dataset.messageId = message.id;
+
+  const avatar = buildAvatar(profile);
+  const content = document.createElement("div");
+  content.className = "message-content";
+
+  const header = document.createElement("div");
+  header.className = "message-header";
+  const author = document.createElement("span");
+  author.className = "message-author";
+  author.textContent = profile.name;
+  const timestamp = document.createElement("span");
+  timestamp.className = "message-timestamp";
+  timestamp.textContent = formatTime(message.timestamp);
+  header.append(author, timestamp);
+
+  const bubble = document.createElement("div");
+  bubble.className = "message-bubble";
+  const safeHTML = escapeHTML(message.content).replace(/\n/g, "<br>");
+  bubble.innerHTML = safeHTML;
+
+  if (message.replyTo) {
+    const reply = buildReplyPreview(message.replyTo, channelMessages);
+    if (reply) bubble.prepend(reply);
+  }
+
+  if (Array.isArray(message.attachments) && message.attachments.length) {
+    const attachmentsNode = document.createElement("div");
+    attachmentsNode.className = "message-attachments";
+    message.attachments.forEach((attachment) => {
+      if (attachment.type === "gif" && attachment.url) {
+        const figure = document.createElement("figure");
+        figure.className = "message-attachment";
+        const img = document.createElement("img");
+        img.src = normalizeAssetPath(attachment.url);
+        img.alt = attachment.name ? `GIF ${attachment.name}` : "GIF anexado";
+        img.loading = "lazy";
+        figure.appendChild(img);
+        attachmentsNode.appendChild(figure);
+      }
+    });
+    if (attachmentsNode.childNodes.length) {
+      bubble.appendChild(attachmentsNode);
+    }
+  }
+
+  content.append(header, bubble);
+  row.append(avatar, content);
+  return row;
+}
+
+function buildAvatar(profile) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "avatar";
+  if (profile.avatar) {
+    const img = document.createElement("img");
+    img.alt = `Avatar de ${profile.name}`;
+    img.src = normalizeAssetPath(profile.avatar);
+    img.addEventListener("error", () => {
+      img.remove();
+      wrapper.textContent = profile.initials ?? profile.name.slice(0, 2).toUpperCase();
+    });
+    wrapper.appendChild(img);
+  } else {
+    wrapper.textContent = profile.initials ?? profile.name.slice(0, 2).toUpperCase();
+  }
+  return wrapper;
+}
+
+function renderReplyAvatar(profile) {
+  if (!elements.replyAvatar) return;
+  elements.replyAvatar.innerHTML = "";
+  const avatarNode = buildAvatar(profile);
+  elements.replyAvatar.appendChild(avatarNode);
+}
+
+function buildReplyPreview(messageId, channelMessages) {
+  const target = channelMessages.find((msg) => msg.id === messageId);
+  if (!target) return null;
+  const profile = profiles[target.authorId] ?? profiles.model ?? { name: "Desconhecido" };
+  const preview = document.createElement("div");
+  preview.className = "reply-preview";
+  preview.textContent = `${profile.name}: ${target.content.slice(0, 70)}${
+    target.content.length > 70 ? "…" : ""
+  }`;
+  return preview;
+}
+
+function formatDay(isoDate) {
+  const date = new Date(isoDate);
+  return date.toLocaleDateString("pt-BR", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+function formatTime(isoDate) {
+  const date = new Date(isoDate);
+  return date.toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function hydrateUserCard() {
+  if (!profiles.user) return;
+  elements.userName.textContent = profiles.user.name;
+  const avatar = buildAvatar(profiles.user);
+  const nodes = Array.from(avatar.childNodes);
+  elements.userAvatar.replaceChildren(...nodes);
+}
+
+function showEmptyState(title, text) {
+  if (!elements.emptyState) return;
+  elements.emptyState.querySelector(".empty-title").textContent = title;
+  elements.emptyState.querySelector(".empty-text").textContent = text;
+  elements.emptyState.classList.add("is-visible");
+}
+
+function hideEmptyState() {
+  elements.emptyState?.classList.remove("is-visible");
+}
+
+async function handleFormSubmit(event) {
+  event.preventDefault();
+  const channel = getActiveChannel();
+  if (!channel) return;
+  const form = event.currentTarget || event.target;
+  const textarea = form?.querySelector("textarea") || elements.messageInput;
+  if (!textarea) return;
+  const text = textarea.value.trim();
+  if (!text) return;
+
+  const server = getActiveServer();
+  if (!server) return;
+  const replyToId = replyState.message?.id ?? null;
+
+  try {
+    const newMessage = await postMessage({
+      serverId: server.id,
+      channelId: channel.id,
+      authorId: "user",
+      content: text,
+      replyTo: replyToId,
+    });
+
+    channel.messages.push(newMessage);
+    textarea.value = "";
+    autoResizeTextarea(textarea);
+    clearReplyTarget();
+    registerUserActivity();
+    renderMessages();
+    queueLouReplyAfterUserMessage(server.id, channel.id, newMessage);
+  } catch (error) {
+    console.error("Falha ao enviar mensagem", error);
+  }
+}
+
+async function triggerLouReplyFlow(serverId, channelId, referenceMessage, options = {}) {
+  const { token } = options;
+  const requestStartedAt = Date.now();
+  const targetInitialDelay =
+    randomBetween(LOU_TYPING_INITIAL_DELAY.min, LOU_TYPING_INITIAL_DELAY.max) + getAvailabilityTypingLag();
+  const abortController = new AbortController();
+  louReplyState.abortController = abortController;
+
+  // Show typing indicator immediately while waiting for the LLM response
+  const earlyPlaceholder = insertLouTypingIndicator(serverId, channelId);
+
+  let payload;
+  const requestBody = {
+    serverId,
+    channelId,
+    replyTo: referenceMessage?.id ?? null,
+  };
+  try {
+    payload = await postJSON(
+      `${API_BASE}/ai/reply`,
+      requestBody,
+      { signal: abortController.signal }
+    );
+  } catch (error) {
+    // Remove early typing indicator on error
+    if (earlyPlaceholder) {
+      removeLouTypingIndicator(serverId, channelId, earlyPlaceholder.id);
+    }
+    if (abortController.signal.aborted) {
+      return;
+    }
+    console.error("Falha ao gerar resposta da Lou", error);
+    const channel = findChannel(serverId, channelId);
+    if (!channel) return;
+    const friendlyMessage = getFriendlyAiErrorMessage(error);
+    channel.messages.push({
+      id: `ai-error-${Date.now()}`,
+      role: "model",
+      authorId: "model",
+      content: friendlyMessage,
+      parts: [friendlyMessage],
+      timestamp: new Date().toISOString(),
+      isError: true,
+    });
+    if (serverId === state.activeServerId && channelId === state.activeChannelId) {
+      renderMessages();
+    }
+    return;
+  } finally {
+    if (louReplyState.abortController === abortController) {
+      louReplyState.abortController = null;
+    }
+  }
+  if (token && token !== louReplyState.generationToken) {
+    // Remove early typing indicator if token is stale
+    if (earlyPlaceholder) {
+      removeLouTypingIndicator(serverId, channelId, earlyPlaceholder.id);
+    }
+    return;
+  }
+  const newMessages = Array.isArray(payload?.messages) ? payload.messages : [];
+  if (!newMessages.length) {
+    if (earlyPlaceholder) {
+      removeLouTypingIndicator(serverId, channelId, earlyPlaceholder.id);
+    }
+    return;
+  }
+
+  // Remove the early placeholder before starting the delivery sequence
+  if (earlyPlaceholder) {
+    removeLouTypingIndicator(serverId, channelId, earlyPlaceholder.id);
+    if (serverId === state.activeServerId && channelId === state.activeChannelId) {
+      renderMessages();
+    }
+  }
+
+  const elapsed = Date.now() - requestStartedAt;
+  const remainingInitialWait = Math.max(targetInitialDelay - elapsed, 0);
+  const outputController = createLouOutputController();
+  louReplyState.outputController = outputController;
+  await playLouTypingSequence(serverId, channelId, newMessages, {
+    initialWait: remainingInitialWait,
+    controller: outputController,
+  });
+  if (louReplyState.outputController === outputController) {
+    louReplyState.outputController = null;
+  }
+  if (outputController.cancelled) {
+    return;
+  }
+  startProactiveTimer();
+  if (payload?.reasoning) {
+    console.info("Raciocínio da Lou:", payload.reasoning);
+  }
+}
+
+function insertLouTypingIndicator(serverId, channelId) {
+  const channel = findChannel(serverId, channelId);
+  if (!channel) return null;
+  const placeholder = {
+    id: `temp-lou-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+    role: "model",
+    authorId: "model",
+    content: "digitando…",
+    parts: ["digitando…"],
+    timestamp: new Date().toISOString(),
+    isTyping: true,
+  };
+  channel.messages.push(placeholder);
+  if (serverId === state.activeServerId && channelId === state.activeChannelId) {
+    renderMessages();
+  }
+  return placeholder;
+}
+
+function removeLouTypingIndicator(serverId, channelId, messageId) {
+  const channel = findChannel(serverId, channelId);
+  if (!channel) return false;
+  const index = channel.messages.findIndex((msg) => msg.id === messageId);
+  if (index === -1) return false;
+  channel.messages.splice(index, 1);
+  return true;
+}
+
+async function playLouTypingSequence(serverId, channelId, messages, options = {}) {
+  if (!Array.isArray(messages) || messages.length === 0) return;
+  const channel = findChannel(serverId, channelId);
+  if (!channel) return;
+  const controller = options.controller;
+  const initialWait = Math.max(0, Number(options.initialWait) || 0);
+  if (!(await waitForController(initialWait, controller))) {
+    return;
+  }
+  if (controller?.cancelled) return;
+  let placeholder = insertLouTypingIndicator(serverId, channelId);
+  let detachPlaceholderCancel = null;
+  if (controller) {
+    detachPlaceholderCancel = controller.onCancel(() => {
+      if (placeholder) {
+        removeLouTypingIndicator(serverId, channelId, placeholder.id);
+        placeholder = null;
+      }
+    });
+  }
+  const removePlaceholder = () => {
+    if (placeholder) {
+      removeLouTypingIndicator(serverId, channelId, placeholder.id);
+      placeholder = null;
+    }
+    if (typeof detachPlaceholderCancel === "function") {
+      detachPlaceholderCancel();
+      detachPlaceholderCancel = null;
+    }
+  };
+  for (let index = 0; index < messages.length; index += 1) {
+    const chunkMessage = messages[index];
+    const typingDuration = estimateLouTypingDurationMs(chunkMessage);
+    if (!(await waitForController(typingDuration, controller))) {
+      removePlaceholder();
+      return;
+    }
+    removePlaceholder();
+    if (controller?.cancelled) {
+      return;
+    }
+    channel.messages.push(chunkMessage);
+    if (serverId === state.activeServerId && channelId === state.activeChannelId) {
+      renderMessages();
+    }
+    if (index < messages.length - 1) {
+      const pause = randomBetween(LOU_TYPING_BETWEEN_DELAY.min, LOU_TYPING_BETWEEN_DELAY.max);
+      if (!(await waitForController(pause, controller))) {
+        return;
+      }
+      if (controller?.cancelled) {
+        return;
+      }
+      placeholder = insertLouTypingIndicator(serverId, channelId);
+      if (controller) {
+        detachPlaceholderCancel = controller.onCancel(() => {
+          if (placeholder) {
+            removeLouTypingIndicator(serverId, channelId, placeholder.id);
+            placeholder = null;
+          }
+        });
+      }
+    }
+  }
+  removePlaceholder();
+  proactiveState.lastLouMessageAt = Date.now();
+}
+
+function getFriendlyAiErrorMessage(error) {
+  const raw = String(error?.message || error || "");
+  if (raw.includes("llama") || raw.includes("modelo") || raw.includes("GGUF")) {
+    return "Nenhum modelo LLM carregado. Abra as configurações do modelo (ícone de chip) para carregar um.";
+  }
+  if (raw.includes("503")) {
+    return "O backend recusou o pedido agora pouco. Tente novamente em instantes.";
+  }
+  return "Não consegui responder agora. Tente de novo em instantes.";
+}
+
+function appendLocalLouMessage(content, options = {}) {
+  if (!content) return null;
+  const server = getActiveServer();
+  const channel = getActiveChannel();
+  if (!server || !channel) return null;
+  const message = {
+    id: `lou-local-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    role: "model",
+    authorId: "model",
+    content,
+    parts: [content],
+    timestamp: new Date().toISOString(),
+    isSystem: Boolean(options.isSystem),
+  };
+  channel.messages.push(message);
+  if (server.id === state.activeServerId && channel.id === state.activeChannelId) {
+    renderMessages();
+  }
+  proactiveState.lastLouMessageAt = Date.now();
+  startProactiveTimer();
+  return message;
+}
+
+function findChannel(serverId, channelId) {
+  const server = state.servers.find((srv) => srv.id === serverId);
+  if (!server) return null;
+  return server.channels.find((chn) => chn.id === channelId) ?? null;
+}
+
+function normalizeAssetPath(path) {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const trimmed = path.replace(/^\/+/, "");
+  return `/${trimmed}`;
+}
+
+async function postMessage({ serverId, channelId, authorId, content, replyTo, attachments }) {
+  return postJSON(`${API_BASE}/servers/${serverId}/channels/${channelId}/messages`, {
+    authorId,
+    content,
+    replyTo,
+    attachments,
+  });
+}
+
+function autoResizeTextarea(target = elements.messageInput) {
+  const textarea = target;
+  if (!textarea) return;
+  if (!textarea.dataset.baseHeight) {
+    textarea.dataset.baseHeight = String(textarea.clientHeight || 46);
+  }
+  const baseHeight = Number(textarea.dataset.baseHeight) || 46;
+  const maxHeight = 120;
+  textarea.style.height = "auto";
+  const nextHeight = Math.min(Math.max(textarea.scrollHeight, baseHeight), maxHeight);
+  textarea.style.height = `${nextHeight}px`;
+  if (textarea.scrollHeight > maxHeight || nextHeight >= maxHeight) {
+    textarea.classList.add("is-scrollable");
+  } else {
+    textarea.classList.remove("is-scrollable");
+  }
+}
+
+function bindEvents() {
+  elements.messageForm?.addEventListener("submit", handleFormSubmit);
+  elements.messageInput?.addEventListener("input", (event) => autoResizeTextarea(event.target));
+  elements.messageInput?.addEventListener("keydown", handleComposerKeyDown);
+  elements.channelCreateButton?.addEventListener("click", handleCreateChannelFlow);
+  elements.channelList?.addEventListener("click", handleChannelListClick);
+  elements.channelList?.addEventListener("keydown", handleChannelListKeyDown);
+  elements.messageList?.addEventListener("click", handleMessageListClick);
+  elements.serverSettingsButton?.addEventListener("click", () => {
+    const server = getActiveServer();
+    if (!server) return;
+    openServerSettingsDialog(server);
+  });
+  elements.profileSettingsButton?.addEventListener("click", () => {
+    openProfileSettingsDialog();
+  });
+  elements.replyCancel?.addEventListener("click", clearReplyTarget);
+  elements.personalityButton?.addEventListener("click", () => {
+    openPersonalityEditor();
+  });
+  elements.personalityCancel?.addEventListener("click", closePersonalityEditor);
+  elements.personalityClose?.addEventListener("click", closePersonalityEditor);
+  elements.personalityPanel?.addEventListener("click", (event) => event.stopPropagation());
+  elements.personalityOverlay?.addEventListener("click", (event) => {
+    if (event.target === elements.personalityOverlay) {
+      closePersonalityEditor();
+    }
+  });
+  elements.personalityCategoryList?.addEventListener("click", handlePersonalityCategoryClick);
+  elements.personalitySave?.addEventListener("click", handlePersonalitySave);
+  elements.contextToggle?.addEventListener("click", openContextPanel);
+  elements.contextClose?.addEventListener("click", closeContextPanel);
+  elements.contextOverlay?.addEventListener("click", (event) => {
+    if (event.target === elements.contextOverlay) {
+      closeContextPanel();
+    }
+  });
+  elements.contextPanel?.addEventListener("click", (event) => event.stopPropagation());
+  elements.availabilityToggle?.addEventListener("click", handleAvailabilityToggleClick);
+  elements.proactiveTrigger?.addEventListener("click", () => triggerProactiveMessage({ manual: true }));
+  elements.gifButton?.addEventListener("click", openGifPicker);
+  elements.gifClose?.addEventListener("click", closeGifPicker);
+  elements.gifUpload?.addEventListener("click", handleGifUploadClick);
+  elements.gifFileInput?.addEventListener("change", handleGifFileChange);
+  elements.gifOverlay?.addEventListener("click", (event) => {
+    if (event.target === elements.gifOverlay) {
+      closeGifPicker();
+    }
+  });
+  elements.gifPanel?.addEventListener("click", (event) => event.stopPropagation());
+  elements.gifSearch?.addEventListener("input", handleGifSearchInput);
+  elements.gifList?.addEventListener("click", handleGifListClick);
+  document.addEventListener("keydown", handleGifEscapeKey);
+  elements.llmSettingsButton?.addEventListener("click", openLlmPanel);
+  elements.llmClose?.addEventListener("click", closeLlmPanel);
+  elements.llmOverlay?.addEventListener("click", (event) => {
+    if (event.target === elements.llmOverlay) closeLlmPanel();
+  });
+  elements.llmPanel?.addEventListener("click", (event) => event.stopPropagation());
+  elements.llmLoad?.addEventListener("click", handleLlmLoad);
+  elements.llmUnload?.addEventListener("click", handleLlmUnload);
+  window.addEventListener("resize", () => scheduleChannelLimitCheck(getActiveServer()));
+}
+
+function handleComposerKeyDown(event) {
+  if (event.key !== "Enter" || event.shiftKey) return;
+  const form = event.target?.closest("form");
+  if (!form) return;
+  event.preventDefault();
+  form.requestSubmit();
+}
+
+async function init() {
+  bindEvents();
+  initAiAvailability();
+  autoResizeTextarea(elements.messageInput);
+  // Render skeleton immediately so the UI appears fast
+  state.isLoading = false;
+  hydrateUserCard();
+  renderServers();
+  renderChannels();
+  renderChatArea();
+  try {
+    const response = await fetch(`${API_BASE}/bootstrap`);
+    if (!response.ok) throw new Error("Falha ao carregar dados iniciais");
+    const payload = await response.json();
+    profiles = payload.profiles ?? {};
+    state.servers = payload.servers ?? [];
+    state.activeServerId = state.servers[0]?.id ?? null;
+    state.activeChannelId = state.servers[0]?.channels[0]?.id ?? null;
+  } catch (error) {
+    console.error("Bootstrap falhou", error);
+  } finally {
+    hydrateUserCard();
+    renderServers();
+    renderChannels();
+    renderChatArea();
+    refreshProactiveWatcher({ resetAttempts: true, resetAnchors: true, silent: true });
+  }
+}
+
+init();
+
+function handleChannelListClick(event) {
+  const actionButton = event.target.closest("[data-channel-action]");
+  const channelButton = event.target.closest(".channel-button");
+  const server = getActiveServer();
+  if (!server) return;
+  if (actionButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    const container = actionButton.closest(".channel-button");
+    if (!container) return;
+    const channel = server.channels.find((chn) => chn.id === container.dataset.channelId);
+    if (!channel) return;
+    if (actionButton.dataset.channelAction === "rename") {
+      openChannelRenameDialog(server, channel);
+    } else if (actionButton.dataset.channelAction === "delete") {
+      openChannelDeleteDialog(server, channel);
+    }
+    return;
+  }
+  if (channelButton && channelButton.dataset.channelId) {
+    const channelId = channelButton.dataset.channelId;
+    if (state.activeChannelId === channelId) return;
+    state.activeChannelId = channelId;
+    renderChannels();
+    renderChatArea();
+    refreshProactiveWatcher({ resetAttempts: true, resetAnchors: true, silent: true });
+  }
+}
+
+function handleChannelListKeyDown(event) {
+  if (!(event.key === "Enter" || event.key === " ")) return;
+  const actionButton = event.target.closest("[data-channel-action]");
+  if (!actionButton) return;
+  event.preventDefault();
+  actionButton.click();
+}
+
+function handleMessageListClick(event) {
+  const actionButton = event.target.closest("[data-message-action]");
+  if (actionButton) {
+    event.preventDefault();
+    const row = actionButton.closest(".message-row");
+    processMessageReplyRequest(row);
+    return;
+  }
+  const bubble = event.target.closest(".message-bubble");
+  if (!bubble) return;
+  const messageRow = bubble.closest(".message-row");
+  if (!messageRow || messageRow.dataset.messageAuthor !== "model") {
+    return;
+  }
+  event.preventDefault();
+  processMessageReplyRequest(messageRow);
+}
+
+function processMessageReplyRequest(messageRow) {
+  if (!messageRow) return;
+  const channel = getActiveChannel();
+  const server = getActiveServer();
+  if (!channel || !server) return;
+  const message = channel.messages.find((msg) => msg.id === messageRow.dataset.messageId);
+  if (!message) return;
+  setReplyTarget(server.id, channel.id, message);
+}
+
+function setReplyTarget(serverId, channelId, message) {
+  replyState.serverId = serverId;
+  replyState.channelId = channelId;
+  replyState.message = message;
+  updateReplyIndicator();
+  elements.messageInput?.focus();
+}
+
+function clearReplyTarget() {
+  if (!replyState.message) {
+    updateReplyIndicator();
+    return;
+  }
+  replyState.serverId = null;
+  replyState.channelId = null;
+  replyState.message = null;
+  updateReplyIndicator();
+}
+
+function updateReplyIndicator() {
+  if (!elements.replyIndicator || !elements.replyAuthor || !elements.replySnippet) return;
+  if (!replyState.message) {
+    elements.replyIndicator.classList.add("is-hidden");
+    elements.replySnippet.textContent = "";
+    if (elements.replyAvatar) {
+      elements.replyAvatar.innerHTML = "";
+    }
+    return;
+  }
+  const profile = profiles[replyState.message.authorId] ?? profiles.model ?? { name: "Desconhecido" };
+  const rawSnippet = replyState.message.content ?? replyState.message.parts?.[0] ?? "";
+  const cleanSnippet = rawSnippet.trim().replace(/\s+/g, " ");
+  const truncated = cleanSnippet.length > 90 ? `${cleanSnippet.slice(0, 90)}…` : cleanSnippet;
+  elements.replyAuthor.textContent = profile.name;
+  elements.replySnippet.textContent = truncated;
+  renderReplyAvatar(profile);
+  elements.replyIndicator.classList.remove("is-hidden");
+}
+
+async function handleCreateChannelFlow() {
+  const server = getActiveServer();
+  if (!server) return;
+  if (Array.isArray(server.channels) && server.channels.length >= MAX_TEXT_CHANNELS) {
+    window.alert(`Limite de ${MAX_TEXT_CHANNELS} chats atingido. Exclua um canal antes de criar outro.`);
+    updateChannelCreationAvailability(server);
+    return;
+  }
+  const name = generateAutoChannelName(server);
+  try {
+    const channel = await postJSON(`${API_BASE}/servers/${server.id}/channels`, { name });
+    server.channels.push(channel);
+    state.activeChannelId = channel.id;
+    renderChannels();
+    renderChatArea();
+    refreshProactiveWatcher({ resetAttempts: true, resetAnchors: true, silent: true });
+  } catch (error) {
+    console.error("Falha ao criar canal", error);
+  }
+}
+
+function generateAutoChannelName(server) {
+  const baseName = "Novo Chat";
+  if (!server || !Array.isArray(server.channels) || server.channels.length === 0) {
+    return baseName;
+  }
+  const pattern = /^novo chat(?:\s+(\d+))?$/i;
+  let nextIndex = 1;
+  for (const channel of server.channels) {
+    const match = typeof channel.name === "string" ? channel.name.match(pattern) : null;
+    if (!match) continue;
+    const number = match[1] ? Number.parseInt(match[1], 10) : 1;
+    if (Number.isFinite(number) && number >= nextIndex) {
+      nextIndex = number + 1;
+    }
+  }
+  return nextIndex === 1 ? baseName : `${baseName} ${nextIndex}`;
+}
+
+function openChannelRenameDialog(server, channel) {
+  const safeName = escapeHTML(channel.name);
+  const template = `
+    <div class="lou-dialog" role="dialog" aria-modal="true">
+      <div class="lou-dialog__header">
+        <div>
+          <h2 class="lou-dialog__title">Renomear canal</h2>
+          <p class="lou-dialog__subtitle">@${safeName}</p>
+        </div>
+        <button class="lou-dialog__close" type="button" data-action="close">×</button>
+      </div>
+      <form class="lou-form" data-role="channel-form">
+        <label class="lou-field lou-field--spaced">
+          <span class="lou-label">Nome do canal</span>
+          <input class="lou-input" name="name" value="${safeName}" maxlength="48" autocomplete="off" />
+        </label>
+        <div class="lou-dialog__actions">
+          <button class="lou-button" type="button" data-action="cancel">Cancelar</button>
+          <button class="lou-button primary" type="submit">Salvar</button>
+        </div>
+      </form>
+    </div>`;
+  const backdrop = openDialog(template);
+  if (!backdrop) return;
+  const dialog = backdrop.querySelector(".lou-dialog");
+  const form = dialog.querySelector("[data-role=channel-form]");
+  const nameInput = form.querySelector('input[name="name"]');
+  const cancelButtons = dialog.querySelectorAll('[data-action="close"],[data-action="cancel"]');
+  cancelButtons.forEach((btn) => btn.addEventListener("click", closeDialog));
+  nameInput.focus();
+  nameInput.select();
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const newName = nameInput.value.trim();
+    if (!newName) {
+      nameInput.focus();
+      return;
+    }
+    try {
+      const updated = await patchJSON(`${API_BASE}/servers/${server.id}/channels/${channel.id}`, { name: newName });
+      Object.assign(channel, updated);
+      renderChannels();
+      renderChatArea();
+      closeDialog();
+    } catch (error) {
+      console.error("Falha ao renomear canal", error);
+      window.alert(error.message);
+    }
+  });
+}
+
+function openChannelDeleteDialog(server, channel) {
+  const safeName = escapeHTML(channel.name);
+  const template = `
+    <div class="lou-dialog" role="dialog" aria-modal="true">
+      <div class="lou-dialog__header">
+        <div>
+          <h2 class="lou-dialog__title">Excluir canal</h2>
+          <p class="lou-dialog__subtitle">@${safeName}</p>
+        </div>
+        <button class="lou-dialog__close" type="button" data-action="close">×</button>
+      </div>
+      <p>Essa ação removerá todo o histórico de mensagens do canal. Tem certeza?</p>
+      <div class="lou-dialog__actions">
+        <button class="lou-button" type="button" data-action="cancel">Cancelar</button>
+        <button class="lou-button danger" type="button" data-action="confirm">Excluir</button>
+      </div>
+    </div>`;
+  const backdrop = openDialog(template);
+  if (!backdrop) return;
+  const dialog = backdrop.querySelector(".lou-dialog");
+  const cancelButtons = dialog.querySelectorAll('[data-action="close"],[data-action="cancel"]');
+  cancelButtons.forEach((btn) => btn.addEventListener("click", closeDialog));
+  const confirmButton = dialog.querySelector('[data-action="confirm"]');
+  confirmButton.addEventListener("click", async () => {
+    confirmButton.disabled = true;
+    try {
+      await deleteJSON(`${API_BASE}/servers/${server.id}/channels/${channel.id}`);
+      removeChannelFromState(server.id, channel.id);
+      renderChannels();
+      renderChatArea();
+      closeDialog();
+    } catch (error) {
+      console.error("Falha ao excluir canal", error);
+      window.alert(error.message);
+      confirmButton.disabled = false;
+    }
+  });
+}
+
+function removeChannelFromState(serverId, channelId) {
+  const targetServer = state.servers.find((srv) => srv.id === serverId);
+  if (!targetServer) return;
+  targetServer.channels = targetServer.channels.filter((chn) => chn.id !== channelId);
+  if (state.activeChannelId === channelId) {
+    state.activeChannelId = targetServer.channels[0]?.id ?? null;
+  }
+  if (replyState.channelId === channelId) {
+    clearReplyTarget();
+  }
+  refreshProactiveWatcher({ resetAttempts: true, resetAnchors: true, silent: true });
+}
+
+function openServerSettingsDialog(server) {
+  const serverName = server.name ?? "Servidor";
+  const safeName = escapeHTML(serverName);
+  const template = `
+    <div class="lou-dialog" role="dialog" aria-modal="true">
+      <div class="lou-dialog__header">
+        <div>
+          <h2 class="lou-dialog__title">Configurações do servidor</h2>
+          <p class="lou-dialog__subtitle">${safeName}</p>
+        </div>
+        <button class="lou-dialog__close" type="button" data-action="close">×</button>
+      </div>
+      <form class="lou-form" data-role="server-form">
+        <label class="lou-field lou-field--spaced">
+          <span class="lou-label">Nome do servidor</span>
+          <input class="lou-input" name="name" value="${safeName}" maxlength="48" autocomplete="off" />
+        </label>
+        <div class="lou-dialog__actions">
+          <button class="lou-button danger" type="button" data-action="delete">Excluir</button>
+          <span style="flex: 1"></span>
+          <button class="lou-button" type="button" data-action="cancel">Cancelar</button>
+          <button class="lou-button primary" type="submit">Salvar</button>
+        </div>
+      </form>
+    </div>`;
+  const backdrop = openDialog(template);
+  if (!backdrop) return;
+  const dialog = backdrop.querySelector(".lou-dialog");
+  const form = dialog.querySelector("[data-role=server-form]");
+  const nameInput = form.querySelector('input[name="name"]');
+  const deleteButton = form.querySelector('[data-action="delete"]');
+  const cancelButtons = dialog.querySelectorAll('[data-action="close"],[data-action="cancel"]');
+  cancelButtons.forEach((btn) => btn.addEventListener("click", closeDialog));
+  nameInput.focus();
+  nameInput.select();
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const newName = nameInput.value.trim();
+    if (!newName) {
+      nameInput.focus();
+      return;
+    }
+    const payload = { name: newName };
+    try {
+      const updated = await patchJSON(`${API_BASE}/servers/${server.id}`, payload);
+      Object.assign(server, updated);
+      renderServers();
+      renderChannels();
+      renderChatArea();
+      closeDialog();
+    } catch (error) {
+      console.error("Falha ao atualizar servidor", error);
+      window.alert(error.message);
+    }
+  });
+
+  let deleteConfirmTimer = null;
+  deleteButton.addEventListener("click", async () => {
+    if (!deleteButton.dataset.confirmed) {
+      deleteButton.dataset.confirmed = "true";
+      const originalLabel = "Excluir";
+      deleteButton.textContent = "Confirmar exclusão";
+      deleteConfirmTimer = window.setTimeout(() => {
+        deleteButton.dataset.confirmed = "";
+        deleteButton.textContent = originalLabel;
+      }, 3500);
+      return;
+    }
+    window.clearTimeout(deleteConfirmTimer);
+    deleteButton.disabled = true;
+    try {
+      await deleteJSON(`${API_BASE}/servers/${server.id}`);
+      const wasActive = state.activeServerId === server.id;
+      state.servers = state.servers.filter((item) => item.id !== server.id);
+      if (replyState.serverId === server.id) {
+        clearReplyTarget();
+      }
+      if (!state.servers.length) {
+        state.activeServerId = null;
+        state.activeChannelId = null;
+      } else if (wasActive) {
+        state.activeServerId = state.servers[0].id;
+        state.activeChannelId = state.servers[0].channels[0]?.id ?? null;
+      }
+      renderServers();
+      renderChannels();
+      renderChatArea();
+  refreshProactiveWatcher({ resetAttempts: true, resetAnchors: true, silent: true });
+      closeDialog();
+    } catch (error) {
+      console.error("Falha ao excluir servidor", error);
+      window.alert(error.message);
+      deleteButton.disabled = false;
+    }
+  });
+}
+
+function openProfileSettingsDialog() {
+  if (!profiles.user && !profiles.model) return;
+  let currentKey = "user";
+  let currentAvatarValue = "";
+  const template = `
+    <div class="lou-dialog" role="dialog" aria-modal="true">
+      <div class="lou-dialog__header">
+        <div>
+          <h2 class="lou-dialog__title">Perfis</h2>
+          <p class="lou-dialog__subtitle">Configure nome e avatar</p>
+        </div>
+        <button class="lou-dialog__close" type="button" data-action="close">×</button>
+      </div>
+      <div class="lou-tab-group" data-role="profile-tabs">
+        <button class="lou-tab is-active" type="button" data-profile-key="user">Você</button>
+        <button class="lou-tab" type="button" data-profile-key="model">Lou</button>
+      </div>
+      <div class="lou-profile-preview">
+        <div class="lou-avatar-preview" data-role="avatar-preview"></div>
+        <div class="lou-avatar-actions">
+          <p class="lou-hint">Envie PNG/JPG (até 2 MB).</p>
+          <button class="ghost-button" type="button" data-action="upload-avatar">Enviar imagem</button>
+          <input type="file" data-role="profile-avatar-file" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+          <p class="lou-hint" data-role="avatar-status"></p>
+        </div>
+      </div>
+      <form class="lou-form" data-role="profile-form">
+        <label class="lou-field lou-field--spaced">
+          <span class="lou-label">Nome</span>
+          <input class="lou-input" name="name" maxlength="48" autocomplete="off" />
+        </label>
+        <div class="lou-dialog__actions">
+          <button class="lou-button" type="button" data-action="cancel">Cancelar</button>
+          <button class="lou-button primary" type="submit">Salvar</button>
+        </div>
+      </form>
+    </div>`;
+  const backdrop = openDialog(template);
+  if (!backdrop) return;
+  const dialog = backdrop.querySelector(".lou-dialog");
+  const subtitle = dialog.querySelector(".lou-dialog__subtitle");
+  const tabs = dialog.querySelectorAll("[data-profile-key]");
+  const form = dialog.querySelector("[data-role=profile-form]");
+  const nameInput = form.querySelector('input[name="name"]');
+  const preview = dialog.querySelector("[data-role=avatar-preview]");
+  const avatarUploadButton = dialog.querySelector('[data-action="upload-avatar"]');
+  const avatarFileInput = dialog.querySelector('[data-role="profile-avatar-file"]');
+  const avatarStatus = dialog.querySelector('[data-role="avatar-status"]');
+  const cancelButtons = dialog.querySelectorAll('[data-action="close"],[data-action="cancel"]');
+  cancelButtons.forEach((btn) => btn.addEventListener("click", closeDialog));
+
+  const updateAvatarPreview = (path) => {
+    preview.innerHTML = "";
+    const img = document.createElement("img");
+    img.alt = "Prévia do avatar";
+    const safePath = path && path.trim() ? path.trim() : "assets/avatars/default.png";
+    img.src = normalizeAssetPath(safePath);
+    img.addEventListener("error", () => {
+      img.src = normalizeAssetPath("assets/avatars/default.png");
+    });
+    preview.appendChild(img);
+  };
+
+  const syncTabs = () => {
+    tabs.forEach((tab) => {
+      tab.classList.toggle("is-active", tab.dataset.profileKey === currentKey);
+    });
+    const profile = profiles[currentKey] ?? {};
+    subtitle.textContent = currentKey === "user" ? "Seu perfil" : "Perfil da Lou";
+    nameInput.value = profile.name ?? "";
+    currentAvatarValue = profile.avatar ?? "";
+    updateAvatarPreview(currentAvatarValue);
+    if (avatarStatus) avatarStatus.textContent = "";
+  };
+
+  tabs.forEach((tab) => {
+    tab.addEventListener("click", () => {
+      currentKey = tab.dataset.profileKey;
+      syncTabs();
+    });
+  });
+
+  initializeAvatarUploadControls({
+    uploadButton: avatarUploadButton,
+    fileInput: avatarFileInput,
+    statusNode: avatarStatus,
+    onSuccess: (payload) => {
+      const normalized = normalizeUploadedAvatarPath(payload);
+      currentAvatarValue = normalized;
+      updateAvatarPreview(normalized);
+    },
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const newName = nameInput.value.trim();
+    if (!newName) {
+      nameInput.focus();
+      return;
+    }
+    const normalizedAvatar = (currentAvatarValue ?? "").trim();
+    const payload = {
+      name: newName,
+      avatar: normalizedAvatar || null,
+    };
+    try {
+      const updated = await patchJSON(`${API_BASE}/profiles/${currentKey}`, payload);
+      profiles[currentKey] = { ...(profiles[currentKey] ?? {}), ...updated };
+      hydrateUserCard();
+      renderMessages();
+      closeDialog();
+    } catch (error) {
+      console.error("Falha ao atualizar perfil", error);
+      window.alert(error.message);
+    }
+  });
+
+  syncTabs();
+  nameInput.focus();
+  nameInput.select();
+}
+
+async function openPersonalityEditor() {
+  if (!elements.personalityOverlay) return;
+  elements.personalityOverlay.classList.remove("is-hidden");
+  syncOverlayPresence();
+  if (!personalityState.data) {
+    await loadPersonalityData();
+    return;
+  }
+  buildPersonalityDraft(true);
+  renderPersonalityPanel();
+}
+
+function closePersonalityEditor() {
+  elements.personalityOverlay?.classList.add("is-hidden");
+  syncOverlayPresence();
+}
+
+async function loadPersonalityData(force = false) {
+  if (personalityState.isLoading) return;
+  if (personalityState.data && !force) {
+    buildPersonalityDraft(true);
+    renderPersonalityPanel();
+    return;
+  }
+  personalityState.isLoading = true;
+  setPersonalityStatus("Carregando ficha de personalidade…");
+  try {
+    const response = await fetch(`${API_BASE}/personality`);
+    if (!response.ok) throw new Error("Falha ao carregar personalidade");
+    const payload = await response.json();
+    personalityState.data = payload ?? {};
+    buildPersonalityDraft();
+    renderPersonalityPanel();
+  setPersonalityStatus("");
+  } catch (error) {
+    console.error("Falha ao carregar personalidade", error);
+    setPersonalityStatus("Erro ao carregar personalidade");
+  } finally {
+    personalityState.isLoading = false;
+    updatePersonalitySaveState({ skipStatus: true });
+  }
+}
+
+function buildPersonalityDraft(preserveCategory = false) {
+  const definition = personalityState.data?.personality_definition ?? {};
+  personalityState.draft = JSON.parse(JSON.stringify(definition));
+  const categoryKeys = Object.keys(definition);
+  if (
+    preserveCategory &&
+    personalityState.activeCategory &&
+    Object.prototype.hasOwnProperty.call(definition, personalityState.activeCategory)
+  ) {
+    // Keep current selection.
+  } else {
+    personalityState.activeCategory = categoryKeys[0] ?? null;
+  }
+  personalityState.hasUnsavedChanges = false;
+}
+
+function renderPersonalityPanel() {
+  renderPersonalityCategories();
+  if (personalityState.activeCategory) {
+    renderPersonalityFields(personalityState.activeCategory);
+  } else if (elements.personalityFields && elements.personalityEmpty) {
+    elements.personalityFields.innerHTML = "";
+    elements.personalityEmpty.textContent = "Nenhuma seção disponível.";
+    elements.personalityEmpty.classList.remove("is-hidden");
+  }
+  updatePersonalitySaveState();
+}
+
+function renderPersonalityCategories() {
+  if (!elements.personalityCategoryList) return;
+  const target = elements.personalityCategoryList;
+  target.innerHTML = "";
+  const definition = personalityState.draft ?? {};
+  const categoryKeys = Object.keys(definition);
+  if (!categoryKeys.length) {
+    const emptyNode = document.createElement("p");
+    emptyNode.className = "personality-sidebar-empty";
+    emptyNode.textContent = "O arquivo personality_prompt.json não possui seções para editar.";
+    target.appendChild(emptyNode);
+    return;
+  }
+  categoryKeys.forEach((key) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "personality-category";
+    if (key === personalityState.activeCategory) button.classList.add("is-active");
+    button.dataset.categoryKey = key;
+    button.textContent = formatPersonalityLabel(key);
+    target.appendChild(button);
+  });
+}
+
+function handlePersonalityCategoryClick(event) {
+  const button = event.target.closest("[data-category-key]");
+  if (!button) return;
+  const { categoryKey } = button.dataset;
+  if (!categoryKey || categoryKey === personalityState.activeCategory) return;
+  if (!personalityState.draft || !personalityState.draft[categoryKey]) return;
+  personalityState.activeCategory = categoryKey;
+  renderPersonalityPanel();
+}
+
+function renderPersonalityFields(categoryKey) {
+  if (!elements.personalityFields || !elements.personalityEmpty) return;
+  const definition = personalityState.draft ?? {};
+  const fields = definition[categoryKey];
+  elements.personalityFields.innerHTML = "";
+  if (!fields) {
+    elements.personalityEmpty.textContent = "Nada para editar nesta seção.";
+    elements.personalityEmpty.classList.remove("is-hidden");
+    return;
+  }
+  elements.personalityEmpty.classList.add("is-hidden");
+  Object.entries(fields).forEach(([fieldKey, value]) => {
+    const wrapper = document.createElement("label");
+    wrapper.className = "personality-field";
+    const label = document.createElement("span");
+    label.className = "personality-field-label";
+    label.textContent = formatPersonalityLabel(fieldKey);
+    const input = buildPersonalityFieldInput(fieldKey, value, `${categoryKey}.${fieldKey}`);
+    wrapper.append(label, input);
+    elements.personalityFields.appendChild(wrapper);
+  });
+}
+
+function buildPersonalityFieldInput(fieldKey, value, path) {
+  const kind = determinePersonalityFieldKind(fieldKey, value);
+  const isTextarea = kind === "list" || kind === "long";
+  const input = document.createElement(isTextarea ? "textarea" : "input");
+  if (!isTextarea) {
+    if (kind === "int" || kind === "float") {
+      input.type = "number";
+      if (kind === "float") input.step = "0.01";
+    } else {
+      input.type = "text";
+    }
+  } else {
+    input.rows = kind === "list" ? 4 : 3;
+  }
+  input.value = formatPersonalityFieldValue(kind, value);
+  input.dataset.fieldPath = path;
+  input.dataset.fieldType = kind;
+  input.addEventListener("input", handlePersonalityFieldChange);
+  if (kind === "list") {
+    input.placeholder = "Separe os itens com quebras de linha";
+  }
+  return input;
+}
+
+function determinePersonalityFieldKind(fieldKey, value) {
+  if (Array.isArray(value)) return "list";
+  if (typeof value === "number") return Number.isInteger(value) ? "int" : "float";
+  if (fieldKey === "DataNascimento") return "date";
+  if (typeof value === "string" && (value.length > 120 || value.includes("\n"))) return "long";
+  return "string";
+}
+
+function formatPersonalityFieldValue(kind, value) {
+  if (value === null || value === undefined) return "";
+  if (kind === "list" && Array.isArray(value)) {
+    return value.join("\n");
+  }
+  if (kind === "date") {
+    return formatDateForDisplay(String(value));
+  }
+  return String(value);
+}
+
+function handlePersonalityFieldChange(event) {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) return;
+  const path = input.dataset.fieldPath;
+  if (!path) return;
+  const kind = input.dataset.fieldType ?? "string";
+  const parsedValue = parsePersonalityFieldValue(input.value, kind);
+  setDraftValue(path, parsedValue);
+  personalityState.hasUnsavedChanges = true;
+  updatePersonalitySaveState();
+}
+
+function setDraftValue(path, value) {
+  if (!personalityState.draft) return;
+  const segments = path.split(".");
+  const finalKey = segments.pop();
+  if (!finalKey) return;
+  let cursor = personalityState.draft;
+  segments.forEach((segment) => {
+    if (!Object.prototype.hasOwnProperty.call(cursor, segment)) {
+      cursor[segment] = {};
+    }
+    cursor = cursor[segment];
+  });
+  cursor[finalKey] = value;
+}
+
+function parsePersonalityFieldValue(rawValue, kind) {
+  const trimmed = rawValue.trim();
+  switch (kind) {
+    case "list": {
+      const tokens = rawValue.split(/\r?\n|,/);
+      return tokens.map((item) => item.trim()).filter(Boolean);
+    }
+    case "int": {
+      if (!trimmed) return null;
+      const parsed = Number.parseInt(trimmed, 10);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    case "float": {
+      if (!trimmed) return null;
+      const parsed = Number.parseFloat(trimmed);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    case "date": {
+      if (!trimmed) return "";
+      return normalizeDateForSave(trimmed);
+    }
+    default:
+      return rawValue;
+  }
+}
+
+function formatPersonalityLabel(key) {
+  if (!key) return "";
+  if (Object.prototype.hasOwnProperty.call(PERSONALITY_LABEL_OVERRIDES, key)) {
+    return PERSONALITY_LABEL_OVERRIDES[key];
+  }
+  const spaced = key.replace(/([A-Z])/g, " $1").replace(/_/g, " ").trim();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function formatDateForDisplay(value) {
+  const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${day}/${month}/${year}`;
+  }
+  return value;
+}
+
+function normalizeDateForSave(value) {
+  const normalized = value.replace(/-/g, "/");
+  const parts = normalized.split(/[\/]/);
+  if (parts.length === 3 && parts[0].length === 2) {
+    const [day, month, year] = parts;
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  return value;
+}
+
+function setPersonalityStatus(message) {
+  if (!elements.personalityStatus) return;
+  elements.personalityStatus.textContent = message ?? "";
+}
+
+function updatePersonalitySaveState(options = {}) {
+  if (elements.personalitySave) {
+    elements.personalitySave.disabled =
+      !personalityState.hasUnsavedChanges || personalityState.isSaving || !personalityState.draft;
+    elements.personalitySave.textContent = personalityState.isSaving ? "Salvando..." : "Salvar alterações";
+  }
+  if (!options.skipStatus && !personalityState.isSaving && !personalityState.isLoading) {
+    if (personalityState.hasUnsavedChanges) {
+      setPersonalityStatus("Alterações não salvas");
+    } else {
+      setPersonalityStatus("");
+    }
+  }
+}
+
+async function handlePersonalitySave() {
+  if (!personalityState.draft || !personalityState.hasUnsavedChanges || personalityState.isSaving) return;
+  personalityState.isSaving = true;
+  updatePersonalitySaveState({ skipStatus: true });
+  setPersonalityStatus("Salvando alterações…");
+  try {
+    const payload = await patchJSON(`${API_BASE}/personality`, {
+      personality_definition: personalityState.draft,
+    });
+    personalityState.data = payload ?? {};
+    buildPersonalityDraft(true);
+    renderPersonalityPanel();
+    setPersonalityStatus("Alterações salvas");
+  } catch (error) {
+    console.error("Falha ao salvar personalidade", error);
+    setPersonalityStatus("Erro ao salvar alterações");
+    window.alert("Não foi possível salvar as alterações da personalidade.");
+  } finally {
+    personalityState.isSaving = false;
+    updatePersonalitySaveState({ skipStatus: true });
+    window.setTimeout(() => {
+      if (!personalityState.hasUnsavedChanges) {
+        updatePersonalitySaveState();
+      }
+    }, 1200);
+  }
+}
+
+function openGifPicker() {
+  if (!elements.gifOverlay) return;
+  elements.gifOverlay.classList.remove("is-hidden");
+  gifState.isOpen = true;
+  syncOverlayPresence();
+  if (elements.gifSearch) {
+    elements.gifSearch.value = gifState.filter;
+    elements.gifSearch.focus();
+  }
+  setGifStatus(gifState.hasLoaded ? "Selecione uma reação" : "Carregando GIFs disponíveis…");
+  if (!gifState.hasLoaded) {
+    loadGifCatalog();
+  } else {
+    renderGifGrid();
+  }
+}
+
+function closeGifPicker() {
+  elements.gifOverlay?.classList.add("is-hidden");
+  gifState.isOpen = false;
+  syncOverlayPresence();
+}
+
+async function loadGifCatalog(force = false) {
+  if (gifState.isLoading) return;
+  if (gifState.hasLoaded && !force) {
+    renderGifGrid();
+    return;
+  }
+  gifState.isLoading = true;
+  setGifStatus("Carregando GIFs disponíveis…");
+  try {
+    const response = await fetch(`${API_BASE}/gifs`);
+    if (!response.ok) throw new Error("Falha ao carregar GIFs");
+    const payload = (await response.json()) ?? [];
+    gifState.gifs = Array.isArray(payload) ? payload : [];
+    gifState.hasLoaded = true;
+    applyGifFilter();
+    setGifStatus(
+      gifState.filtered.length ? `${gifState.filtered.length} GIF(s) disponíveis` : "Nenhum GIF encontrado no diretório"
+    );
+  } catch (error) {
+    console.error("Erro ao carregar GIFs", error);
+    setGifStatus("Erro ao carregar GIFs. Confira a pasta assets/gifs.");
+  } finally {
+    gifState.isLoading = false;
+  }
+}
+
+function applyGifFilter() {
+  const filter = gifState.filter.trim().toLowerCase();
+  if (!filter) {
+    gifState.filtered = [...gifState.gifs];
+  } else {
+    gifState.filtered = gifState.gifs.filter((gif) => gif.name.toLowerCase().includes(filter));
+  }
+  renderGifGrid();
+}
+
+function renderGifGrid() {
+  if (!elements.gifList) return;
+  elements.gifList.innerHTML = "";
+  if (!gifState.filtered.length) {
+    const placeholder = document.createElement("p");
+    placeholder.className = "gif-description";
+    placeholder.style.margin = "0";
+    placeholder.textContent = gifState.hasLoaded
+      ? "Nenhum GIF corresponde a sua busca."
+      : "Ainda não há GIFs disponíveis.";
+    elements.gifList.appendChild(placeholder);
+    return;
+  }
+  gifState.filtered.forEach((gif, index) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "gif-card";
+    card.dataset.gifIndex = String(index);
+    const img = document.createElement("img");
+    img.className = "gif-thumb";
+    img.alt = `GIF ${gif.name}`;
+    img.src = normalizeAssetPath(gif.url);
+    img.loading = "lazy";
+    const label = document.createElement("p");
+    label.className = "gif-name";
+    label.textContent = gif.name;
+    card.append(img, label);
+    elements.gifList.appendChild(card);
+  });
+}
+
+function handleGifSearchInput(event) {
+  if (!(event.target instanceof HTMLInputElement)) return;
+  const value = event.target.value ?? "";
+  gifState.filter = value;
+  applyGifFilter();
+  setGifStatus(
+    gifState.filtered.length
+      ? `${gifState.filtered.length} GIF(s) encontrados`
+      : value
+      ? "Nenhum GIF com esse nome"
+      : "Nenhum GIF disponível"
+  );
+}
+
+function handleGifListClick(event) {
+  if (!(event.target instanceof Element)) return;
+  const card = event.target.closest(".gif-card");
+  if (!card) return;
+  event.preventDefault();
+  const index = Number.parseInt(card.dataset.gifIndex ?? "", 10);
+  if (Number.isNaN(index)) return;
+  const gifEntry = gifState.filtered[index];
+  if (!gifEntry) return;
+  sendGifMessage(gifEntry);
+}
+
+function handleGifUploadClick() {
+  if (!elements.gifFileInput) {
+    setGifStatus("Upload indisponível nesta build.");
+    return;
+  }
+  if (gifState.isUploading) {
+    setGifStatus("Um upload já está em andamento. Aguarde concluir.");
+    return;
+  }
+  elements.gifFileInput.value = "";
+  elements.gifFileInput.click();
+}
+
+async function handleGifFileChange(event) {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement) || !input.files || !input.files.length) {
+    return;
+  }
+  const [file] = input.files;
+  input.value = "";
+  if (file) {
+    await uploadGifFile(file);
+  }
+}
+
+async function uploadGifFile(file) {
+  if (gifState.isUploading) {
+    setGifStatus("Finalize o upload atual antes de enviar outro arquivo.");
+    return;
+  }
+  if (!file.type.includes("gif")) {
+    setGifStatus("Escolha um arquivo .gif válido.");
+    return;
+  }
+  const maxSize = 5 * 1024 * 1024;
+  if (file.size > maxSize) {
+    setGifStatus("Limite de 5 MB excedido.");
+    return;
+  }
+  gifState.isUploading = true;
+  if (elements.gifUpload) elements.gifUpload.disabled = true;
+  setGifStatus(`Enviando ${file.name}…`);
+  try {
+    const dataUrl = await readFileAsDataUrl(file);
+    const payload = await postJSON(`${API_BASE}/gifs`, {
+      filename: file.name,
+      data: dataUrl,
+    });
+    if (Array.isArray(payload?.gifs)) {
+      gifState.gifs = payload.gifs;
+      gifState.hasLoaded = true;
+      const latestName = (payload.filename || file.name || "").replace(/\.gif$/i, "");
+      if (latestName) {
+        gifState.filter = latestName;
+      }
+      applyGifFilter();
+      const label = latestName || (file.name || "novo GIF");
+      setGifStatus(`GIF "${label}" disponível na grade.`);
+    } else {
+      setGifStatus("Upload concluído, mas a lista não pôde ser atualizada.");
+    }
+  } catch (error) {
+    console.error("Falha ao enviar GIF", error);
+    setGifStatus(buildGifUploadErrorMessage(error));
+  } finally {
+    gifState.isUploading = false;
+    if (elements.gifUpload) elements.gifUpload.disabled = false;
+  }
+}
+
+async function sendGifMessage(gifEntry) {
+  const server = getActiveServer();
+  const channel = getActiveChannel();
+  if (!server || !channel) {
+    setGifStatus("Selecione um canal antes de enviar GIFs.");
+    return;
+  }
+  const replyToId = replyState.message?.id ?? null;
+  try {
+    const gifLabel = gifEntry.name || gifEntry.filename || "GIF";
+    const newMessage = await postMessage({
+      serverId: server.id,
+      channelId: channel.id,
+      authorId: "user",
+      content: `[GIF] ${gifLabel}`,
+      replyTo: replyToId,
+      attachments: [
+        {
+          type: "gif",
+          name: gifLabel,
+          filename: gifEntry.filename,
+        },
+      ],
+    });
+    channel.messages.push(newMessage);
+    clearReplyTarget();
+    registerUserActivity();
+    renderMessages();
+    queueLouReplyAfterUserMessage(server.id, channel.id, newMessage);
+    closeGifPicker();
+  } catch (error) {
+    console.error("Falha ao enviar GIF", error);
+    setGifStatus("Erro ao enviar GIF. Confira o backend.");
+  }
+}
+
+function setGifStatus(message) {
+  if (!elements.gifStatus) return;
+  elements.gifStatus.textContent = message || "";
+}
+
+function buildGifUploadErrorMessage(error) {
+  const rawMessage = String(error?.message || error || "").toLowerCase();
+  if (rawMessage.includes("5mb")) {
+    return "O arquivo ultrapassa 5 MB. Escolha um GIF menor.";
+  }
+  if (rawMessage.includes("extensao")) {
+    return "Somente arquivos .gif são aceitos.";
+  }
+  if (rawMessage.includes("base64")) {
+    return "Falha ao ler o arquivo. Tente selecionar o GIF novamente.";
+  }
+  return "Não foi possível enviar o GIF agora. Confira o backend e tente de novo.";
+}
+
+function initializeAvatarUploadControls({ uploadButton, fileInput, statusNode, onSuccess }) {
+  if (!uploadButton || !fileInput) {
+    return;
+  }
+  let isUploading = false;
+  const setStatus = (message) => {
+    if (statusNode) {
+      statusNode.textContent = message || "";
+    }
+  };
+  uploadButton.addEventListener("click", () => {
+    if (isUploading) {
+      return;
+    }
+    fileInput.value = "";
+    fileInput.click();
+  });
+  fileInput.addEventListener("change", async (event) => {
+    const input = event.target;
+    if (!(input instanceof HTMLInputElement) || !input.files || !input.files.length) {
+      return;
+    }
+    const [file] = input.files;
+    input.value = "";
+    if (!file) {
+      return;
+    }
+    isUploading = true;
+    uploadButton.disabled = true;
+    setStatus(`Enviando ${file.name}…`);
+    try {
+      const payload = await uploadAvatarAsset(file);
+      if (typeof onSuccess === "function") {
+        onSuccess(payload);
+      }
+      setStatus("Avatar enviado e preenchido automaticamente.");
+    } catch (error) {
+      console.error("Falha ao enviar avatar", error);
+      setStatus(buildAvatarUploadErrorMessage(error));
+    } finally {
+      isUploading = false;
+      uploadButton.disabled = false;
+    }
+  });
+}
+
+async function uploadAvatarAsset(file) {
+  const allowedExt = ["png", "jpg", "jpeg", "gif", "webp"];
+  const extension = (file.name.split(".").pop() || "").toLowerCase();
+  const isImageType = file.type.startsWith("image/");
+  if (!isImageType && !allowedExt.includes(extension)) {
+    throw new Error("Extensoes permitidas: png, jpg, jpeg, gif, webp");
+  }
+  const maxSize = 2 * 1024 * 1024;
+  if (file.size > maxSize) {
+    throw new Error("Arquivo acima de 2MB");
+  }
+  const dataUrl = await readFileAsDataUrl(file);
+  return postJSON(`${API_BASE}/avatars`, {
+    filename: file.name,
+    data: dataUrl,
+  });
+}
+
+function buildAvatarUploadErrorMessage(error) {
+  const raw = String(error?.message || error || "").toLowerCase();
+  if (raw.includes("2mb")) {
+    return "O arquivo ultrapassa 2 MB.";
+  }
+  if (raw.includes("extens")) {
+    return "Formatos aceitos: png, jpg, jpeg, gif e webp.";
+  }
+  if (raw.includes("base64")) {
+    return "Não consegui ler o arquivo. Tente selecionar novamente.";
+  }
+  return "Não foi possível enviar o avatar agora. Confira o backend.";
+}
+
+function normalizeUploadedAvatarPath(payload) {
+  if (!payload) return "";
+  if (payload.path) {
+    return payload.path.replace(/^\/+/, "");
+  }
+  if (payload.filename) {
+    return `assets/avatars/${payload.filename}`;
+  }
+  return "";
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("Não foi possível converter o arquivo."));
+      }
+    };
+    reader.onerror = () => reject(new Error("Falha ao ler o arquivo selecionado."));
+    reader.readAsDataURL(file);
+  });
+}
+
+function handleGifEscapeKey(event) {
+  if (event.key === "Escape" && gifState.isOpen) {
+    closeGifPicker();
+  }
+}
+
+function openContextPanel() {
+  if (!elements.contextOverlay) return;
+  elements.contextOverlay.classList.remove("is-hidden");
+  contextState.isOpen = true;
+  if (!contextState.hasLoaded) {
+    loadContextSnapshot();
+  } else {
+    renderContextLists();
+  }
+  syncOverlayPresence();
+}
+
+function closeContextPanel() {
+  elements.contextOverlay?.classList.add("is-hidden");
+  contextState.isOpen = false;
+  syncOverlayPresence();
+}
+
+async function loadContextSnapshot(force = false) {
+  if (contextState.isLoading) return;
+  if (contextState.hasLoaded && !force) {
+    renderContextLists();
+    return;
+  }
+  contextState.isLoading = true;
+  setContextStatus("Carregando contexto compartilhado…");
+  try {
+    const response = await fetch(`${API_BASE}/context`);
+    if (!response.ok) throw new Error("Falha ao carregar contexto");
+    const snapshot = await response.json();
+    contextState.snapshot = normalizeContextSnapshot(snapshot);
+    contextState.hasLoaded = true;
+    renderContextLists();
+    setContextStatus("Contexto sincronizado");
+  } catch (error) {
+    console.error("Falha ao carregar contexto", error);
+    setContextStatus("Erro ao carregar contexto");
+  } finally {
+    contextState.isLoading = false;
+  }
+}
+
+function normalizeContextSnapshot(snapshot) {
+  return {
+    long_term: Array.isArray(snapshot?.long_term) ? [...snapshot.long_term] : [],
+  };
+}
+
+function renderContextLists() {
+  renderContextList(elements.contextListLong, contextState.snapshot.long_term, "Nenhum registro de longo prazo");
+}
+
+function renderContextList(listNode, items, emptyLabel) {
+  if (!listNode) return;
+  listNode.innerHTML = "";
+  if (!items || !items.length) {
+    const placeholder = document.createElement("li");
+    placeholder.textContent = emptyLabel;
+    placeholder.style.opacity = "0.7";
+    listNode.appendChild(placeholder);
+    return;
+  }
+  items.forEach((item) => {
+    const entry = document.createElement("li");
+    entry.textContent = item;
+    listNode.appendChild(entry);
+  });
+}
+
+function setContextStatus(message) {
+  if (!elements.contextStatus) return;
+  elements.contextStatus.textContent = message ?? "";
+}
+
+function refreshProactiveWatcher(options = {}) {
+  const channel = getActiveChannel();
+  if (!channel) {
+    stopProactiveTimer();
+    return;
+  }
+  if (options.resetAttempts) {
+    proactiveState.attempt = 0;
+    proactiveState.proactiveMessagesSent = 0;
+    proactiveState.absenceQuestionSent = false;
+    proactiveState.awaitingUserResponse = false;
+    proactiveState.lastProactiveAt = 0;
+    if (options.resetAnchors) {
+      proactiveState.lastLouMessageAt = 0;
+    }
+  }
+  if (!options.silent) {
+    proactiveState.lastUserActivity = Date.now();
+  }
+  startProactiveTimer();
+}
+
+function registerUserActivity() {
+  refreshProactiveWatcher({ resetAttempts: true, resetAnchors: true });
+  proactiveState.lastLouMessageAt = 0;
+  proactiveState.lastProactiveAt = 0;
+  availabilityState.lastUserMessageAt = Date.now();
+  availabilityState.pendingShortCycle = true;
+  if (typeof window !== "undefined" && availabilityState.manualDowntimeTimerId) {
+    window.clearTimeout(availabilityState.manualDowntimeTimerId);
+    availabilityState.manualDowntimeTimerId = null;
+  }
+  if (availabilityState.isManualDowntimeActive) {
+    availabilityState.isManualDowntimeActive = false;
+    updateAiAvailabilityUi();
+  }
+  if (availabilityState.status === "away") {
+    clearAvailabilityShiftTimer();
+    scheduleReturnToAvailableAfterUserMessage();
+    return;
+  }
+  if (!availabilityState.isManualDowntimeActive) {
+    clearAvailabilityShiftTimer();
+  }
+}
+
+function queueLouReplyAfterUserMessage(serverId, channelId, referenceMessage) {
+  if (!serverId || !channelId) return;
+  if (availabilityState.status === "away") {
+    availabilityState.pendingLouReply = { serverId, channelId, referenceMessage };
+    return;
+  }
+  scheduleLouReplyCountdown({ serverId, channelId, referenceMessage });
+}
+
+function isLouReplyInFlight() {
+  return Boolean(
+    louReplyState.timerId ||
+    louReplyState.abortController ||
+    louReplyState.outputController
+  );
+}
+
+function scheduleLouReplyCountdown({ serverId, channelId, referenceMessage }) {
+  if (!serverId || !channelId) return;
+  cancelLouReplyTimer();
+  cancelLouReplyRequest();
+  interruptLouOutput();
+  stopProactiveTimer();
+  louReplyState.serverId = serverId;
+  louReplyState.channelId = channelId;
+  louReplyState.referenceMessage = referenceMessage;
+  const baseDelay = randomBetween(louReplyState.debounceRange.min, louReplyState.debounceRange.max);
+  const waitMs = baseDelay + getAvailabilityResponseLag();
+  louReplyState.generationToken += 1;
+  const token = louReplyState.generationToken;
+  louReplyState.timerId = window.setTimeout(() => {
+    louReplyState.timerId = null;
+    triggerLouReplyFlow(serverId, channelId, referenceMessage, { token });
+  }, waitMs);
+}
+
+function cancelLouReplyTimer() {
+  if (louReplyState.timerId) {
+    window.clearTimeout(louReplyState.timerId);
+    louReplyState.timerId = null;
+  }
+}
+
+function cancelLouReplyRequest() {
+  if (louReplyState.abortController) {
+    louReplyState.abortController.abort();
+    louReplyState.abortController = null;
+  }
+}
+
+function interruptLouOutput() {
+  if (louReplyState.outputController) {
+    louReplyState.outputController.cancel();
+    louReplyState.outputController = null;
+  }
+}
+
+const MAX_PROACTIVE_RETRY_ATTEMPTS = PROACTIVE_RETRY_DELAYS_MS.length;
+
+function clearProactiveRetryTimer() {
+  if (proactiveState.retryTimerId) {
+    window.clearTimeout(proactiveState.retryTimerId);
+    proactiveState.retryTimerId = null;
+  }
+  proactiveState.pendingRetryKind = null;
+  proactiveState.retryAttempt = 0;
+}
+
+function scheduleProactiveRetry(kind, attempt) {
+  if (!kind) return;
+  const clampedAttempt = Math.max(1, attempt);
+  const delay = PROACTIVE_RETRY_DELAYS_MS[Math.min(clampedAttempt - 1, PROACTIVE_RETRY_DELAYS_MS.length - 1)] || PROACTIVE_RETRY_DELAYS_MS[PROACTIVE_RETRY_DELAYS_MS.length - 1];
+  clearProactiveRetryTimer();
+  proactiveState.retryAttempt = clampedAttempt;
+  proactiveState.pendingRetryKind = kind;
+  proactiveState.retryTimerId = window.setTimeout(() => {
+    proactiveState.retryTimerId = null;
+    proactiveState.pendingRetryKind = null;
+    triggerProactiveMessage({ forcedKind: kind, retryAttempt: clampedAttempt });
+  }, delay);
+}
+
+function startProactiveTimer() {
+  clearProactiveRetryTimer();
+  window.clearTimeout(proactiveState.timerId);
+  if (!getActiveChannel()) return;
+  if (proactiveState.awaitingUserResponse) return;
+  const nextKind = getNextProactiveKind();
+  if (!nextKind) return;
+  const anchor = nextKind === "absence"
+    ? (proactiveState.lastProactiveAt || proactiveState.lastLouMessageAt || proactiveState.lastUserActivity)
+    : (proactiveState.lastLouMessageAt || proactiveState.lastUserActivity);
+  if (!anchor) return;
+  const windowRange = nextKind === "absence"
+    ? PROACTIVE_PROFILES.normal.absenceWindow
+    : PROACTIVE_PROFILES.normal.proactiveWindow;
+  const now = Date.now();
+  const elapsed = now - anchor;
+  const minDelay = Math.max(windowRange.min - elapsed, 0);
+  const maxDelay = Math.max(windowRange.max - elapsed, minDelay);
+  const delay = maxDelay === minDelay ? minDelay : randomBetween(minDelay, maxDelay);
+  proactiveState.timerId = window.setTimeout(() => handleProactiveTimeout(nextKind), delay);
+}
+
+function stopProactiveTimer() {
+  if (proactiveState.timerId) {
+    window.clearTimeout(proactiveState.timerId);
+    proactiveState.timerId = null;
+  }
+  clearProactiveRetryTimer();
+}
+
+function getNextProactiveKind() {
+  const profile = PROACTIVE_PROFILES.normal;
+  const maxProactives = profile.maxProactives ?? 2;
+  if (proactiveState.proactiveMessagesSent < maxProactives) {
+    return "proactive";
+  }
+  if (!proactiveState.absenceQuestionSent) {
+    return "absence";
+  }
+  return null;
+}
+
+function handleProactiveTimeout(expectedKind) {
+  const nextKind = getNextProactiveKind();
+  const resolvedKind = expectedKind || nextKind;
+  if (!resolvedKind) {
+    startProactiveTimer();
+    return;
+  }
+  if (!shouldTriggerProactive(resolvedKind)) {
+    startProactiveTimer();
+    return;
+  }
+  triggerProactiveMessage({ forcedKind: resolvedKind });
+}
+
+function shouldTriggerProactive(kind) {
+  const channel = getActiveChannel();
+  if (!channel || !kind) return false;
+  if (proactiveState.awaitingUserResponse) return false;
+  if (isLouReplyInFlight()) return false;
+  const anchor = kind === "absence"
+    ? (proactiveState.lastProactiveAt || proactiveState.lastLouMessageAt || proactiveState.lastUserActivity)
+    : (proactiveState.lastLouMessageAt || proactiveState.lastUserActivity);
+  if (!anchor) return false;
+  const { min, max } = kind === "absence"
+    ? PROACTIVE_PROFILES.normal.absenceWindow
+    : PROACTIVE_PROFILES.normal.proactiveWindow;
+  const now = Date.now();
+  if (now < anchor + min) {
+    return false;
+  }
+  if (proactiveState.lastUserActivity && proactiveState.lastUserActivity > anchor) {
+    return false;
+  }
+  const tolerance = 2000;
+  if (now > anchor + max + tolerance) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeLouMessages(response) {
+  if (!response) {
+    return [];
+  }
+  if (Array.isArray(response.messages)) {
+    return response.messages.filter(Boolean);
+  }
+  if (Array.isArray(response)) {
+    return response.filter(Boolean);
+  }
+  return [response];
+}
+
+async function triggerProactiveMessage(options = {}) {
+  const { manual = false, forcedKind = null, retryAttempt = 0 } = options;
+  const server = getActiveServer();
+  const channel = getActiveChannel();
+  if (!server || !channel) return;
+  if (manual) {
+    clearProactiveRetryTimer();
+  }
+  if (availabilityState.status === "away") {
+    if (!manual) {
+      startProactiveTimer();
+    }
+    return;
+  }
+  const nextKind = manual ? "proactive" : forcedKind || getNextProactiveKind();
+  if (!manual && (!nextKind || proactiveState.awaitingUserResponse)) {
+    stopProactiveTimer();
+    return;
+  }
+
+  if (proactiveState.requestInFlight) return;
+  if (isLouReplyInFlight()) {
+    startProactiveTimer();
+    return;
+  }
+  proactiveState.requestInFlight = true;
+  let scheduledRetry = false;
+  const requestStartedAt = Date.now();
+  const targetInitialDelay =
+    randomBetween(LOU_TYPING_INITIAL_DELAY.min, LOU_TYPING_INITIAL_DELAY.max) + getAvailabilityTypingLag();
+  const profile = PROACTIVE_PROFILES.normal;
+  const maxProactives = profile.maxProactives ?? 2;
+  try {
+    const requestKind = manual ? "proactive" : nextKind;
+    const requestPayload = {
+      serverId: server.id,
+      channelId: channel.id,
+      attempt: manual ? 0 : proactiveState.attempt,
+      kind: requestKind,
+    };
+    const response = await postJSON(`${API_BASE}/proactive`, requestPayload);
+    const newMessages = normalizeLouMessages(response);
+    const elapsed = Date.now() - requestStartedAt;
+    const remainingInitialWait = Math.max(targetInitialDelay - elapsed, 0);
+    await playLouTypingSequence(server.id, channel.id, newMessages, { initialWait: remainingInitialWait });
+    if (nextKind === "proactive") {
+      proactiveState.lastProactiveAt = Date.now();
+    }
+    if (!manual) {
+      if (nextKind === "proactive") {
+          proactiveState.proactiveMessagesSent = Math.min(
+            proactiveState.proactiveMessagesSent + 1,
+            maxProactives
+          );
+      } else if (nextKind === "absence") {
+        proactiveState.absenceQuestionSent = true;
+        proactiveState.awaitingUserResponse = true;
+        scheduleAwayAfterAbsenceQuestion();
+      }
+      proactiveState.attempt += 1;
+    }
+    if (response?.reasoning) {
+      console.info("Raciocínio da Lou:", response.reasoning);
+    }
+  } catch (error) {
+    console.error("Falha ao gerar mensagem proativa", error);
+    const errorMessage = String(error?.message || "");
+    const loweredError = errorMessage.toLowerCase();
+    const isHighLoadMessage = loweredError.includes("high load") || loweredError.includes("overload") || loweredError.includes("busy");
+    const isRetriableStatus = error?.status === 503 || error?.status === 429;
+    const shouldRetry =
+      !manual &&
+      nextKind &&
+      (isRetriableStatus || errorMessage.includes("503") || isHighLoadMessage) &&
+      retryAttempt < MAX_PROACTIVE_RETRY_ATTEMPTS;
+    if (shouldRetry) {
+      scheduledRetry = true;
+      scheduleProactiveRetry(nextKind, retryAttempt + 1);
+    }
+  } finally {
+    proactiveState.requestInFlight = false;
+    if (scheduledRetry) {
+      return;
+    }
+    if (manual) {
+      startProactiveTimer();
+      return;
+    }
+    if (proactiveState.awaitingUserResponse) {
+      stopProactiveTimer();
+      return;
+    }
+    if (getNextProactiveKind()) {
+      startProactiveTimer();
+    } else {
+      stopProactiveTimer();
+    }
+  }
+}
+
+function openDialog(template) {
+  if (!elements.modalRoot) return null;
+  closeDialog();
+  const backdrop = document.createElement("div");
+  backdrop.className = "modal-backdrop";
+  backdrop.innerHTML = template;
+  const dialog = backdrop.querySelector(".lou-dialog");
+  if (!dialog) return null;
+  dialog.addEventListener("click", (event) => event.stopPropagation());
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) closeDialog();
+  });
+  elements.modalRoot.appendChild(backdrop);
+  modalState.node = backdrop;
+  modalState.escHandler = (event) => {
+    if (event.key === "Escape") closeDialog();
+  };
+  document.addEventListener("keydown", modalState.escHandler);
+  syncOverlayPresence();
+  return backdrop;
+}
+
+function closeDialog() {
+  if (modalState.node) {
+    modalState.node.remove();
+    modalState.node = null;
+  }
+  if (modalState.escHandler) {
+    document.removeEventListener("keydown", modalState.escHandler);
+    modalState.escHandler = null;
+  }
+  syncOverlayPresence();
+}
+
+async function postJSON(url, payload, options) {
+  return sendJSON(url, "POST", payload, options);
+}
+
+async function patchJSON(url, payload, options) {
+  return sendJSON(url, "PATCH", payload, options);
+}
+
+async function deleteJSON(url, options) {
+  return sendJSON(url, "DELETE", undefined, options);
+}
+
+async function sendJSON(url, method, payload, requestOptions = {}) {
+  const fetchOptions = {
+    method,
+    headers: { "Content-Type": "application/json" },
+  };
+  if (payload !== undefined) {
+    fetchOptions.body = JSON.stringify(payload);
+  }
+  if (requestOptions?.signal) {
+    fetchOptions.signal = requestOptions.signal;
+  }
+  const response = await fetch(url, fetchOptions);
+  const text = await response.text();
+  if (!response.ok) {
+    const message = text || `Erro ${response.status}`;
+    const error = new Error(message);
+    error.status = response.status;
+    error.statusText = response.statusText;
+    error.body = text;
+    throw error;
+  }
+  return text ? JSON.parse(text) : null;
+}
+
+/* ==========================================================================
+   LLM Settings Panel
+   ========================================================================== */
+
+const llmState = {
+  isOpen: false,
+  isLoading: false,
+  status: null,
+  models: [],
+};
+
+async function openLlmPanel() {
+  if (llmState.isOpen) return;
+  llmState.isOpen = true;
+  elements.llmOverlay?.classList.remove("is-hidden");
+  syncOverlayPresence();
+  await refreshLlmPanel();
+}
+
+function closeLlmPanel() {
+  llmState.isOpen = false;
+  elements.llmOverlay?.classList.add("is-hidden");
+  syncOverlayPresence();
+}
+
+async function refreshLlmPanel() {
+  setLlmFooterStatus("");
+  setLlmStatusIndicator("loading", "Verificando…");
+  try {
+    const [status, models] = await Promise.all([
+      fetch(`${API_BASE}/llm/status`).then((r) => r.json()),
+      fetch(`${API_BASE}/llm/models`).then((r) => r.json()),
+    ]);
+    llmState.status = status;
+    llmState.models = models;
+    populateLlmModelSelect(models, status.model_path);
+    if (elements.llmNCtx) elements.llmNCtx.value = status.n_ctx ?? 8192;
+    if (elements.llmNThreads) elements.llmNThreads.value = status.n_threads ?? 0;
+    if (elements.llmNGpuLayers) elements.llmNGpuLayers.value = status.n_gpu_layers ?? -1;
+    if (elements.llmTemperature) elements.llmTemperature.value = status.temperature ?? 0.9;
+    if (elements.llmMaxTokens) elements.llmMaxTokens.value = status.max_tokens ?? 512;
+    if (elements.llmRepeatPenalty) elements.llmRepeatPenalty.value = status.repeat_penalty ?? 1.1;
+    if (elements.llmTopP) elements.llmTopP.value = status.top_p ?? 0.92;
+    if (elements.llmTopK) elements.llmTopK.value = status.top_k ?? 50;
+    if (status.loaded) {
+      setLlmStatusIndicator("loaded", "Modelo carregado");
+    } else {
+      setLlmStatusIndicator("unloaded", "Nenhum modelo carregado");
+    }
+  } catch (err) {
+    console.error("Falha ao carregar status do LLM", err);
+    setLlmStatusIndicator("unloaded", "Erro ao verificar status");
+  }
+}
+
+function populateLlmModelSelect(models, currentPath) {
+  const select = elements.llmModelSelect;
+  if (!select) return;
+  select.innerHTML = "";
+  if (!models || models.length === 0) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "— Nenhum .gguf encontrado em models/ —";
+    select.appendChild(opt);
+    return;
+  }
+  for (const model of models) {
+    const opt = document.createElement("option");
+    opt.value = model.path;
+    opt.textContent = `${model.filename}  (${model.size_mb} MB)`;
+    if (currentPath && model.path === currentPath) {
+      opt.selected = true;
+    }
+    select.appendChild(opt);
+  }
+}
+
+function setLlmStatusIndicator(status, text) {
+  if (elements.llmStatusDot) elements.llmStatusDot.setAttribute("data-status", status);
+  if (elements.llmStatusText) elements.llmStatusText.textContent = text;
+}
+
+function setLlmFooterStatus(text) {
+  if (elements.llmFooterStatus) elements.llmFooterStatus.textContent = text;
+}
+
+async function handleLlmLoad() {
+  const select = elements.llmModelSelect;
+  const modelPath = select?.value;
+  if (!modelPath) {
+    setLlmFooterStatus("Selecione um modelo primeiro.");
+    return;
+  }
+  const nCtx = parseInt(elements.llmNCtx?.value, 10) || 4096;
+  const nThreads = parseInt(elements.llmNThreads?.value, 10) || 0;
+  const nGpuLayers = parseInt(elements.llmNGpuLayers?.value, 10);
+  const temperature = parseFloat(elements.llmTemperature?.value) || 0.9;
+  const maxTokens = parseInt(elements.llmMaxTokens?.value, 10) || 512;
+  const repeatPenalty = parseFloat(elements.llmRepeatPenalty?.value) || 1.2;
+  const topP = parseFloat(elements.llmTopP?.value) || 0.9;
+  const topK = parseInt(elements.llmTopK?.value, 10) || 40;
+
+  setLlmStatusIndicator("loading", "Carregando modelo…");
+  setLlmFooterStatus("Isso pode levar alguns segundos…");
+  if (elements.llmLoad) elements.llmLoad.disabled = true;
+
+  try {
+    const result = await postJSON(`${API_BASE}/llm/load`, {
+      model_path: modelPath,
+      n_ctx: nCtx,
+      n_threads: nThreads > 0 ? nThreads : null,
+      n_gpu_layers: isNaN(nGpuLayers) ? -1 : nGpuLayers,
+      temperature,
+      repeat_penalty: repeatPenalty,
+      top_p: topP,
+      top_k: topK,
+      max_tokens: maxTokens,
+    });
+    llmState.status = result;
+    setLlmStatusIndicator("loaded", "Modelo carregado");
+    setLlmFooterStatus("Modelo pronto para uso!");
+  } catch (err) {
+    console.error("Falha ao carregar modelo", err);
+    setLlmStatusIndicator("unloaded", "Falha ao carregar");
+    setLlmFooterStatus(String(err?.message || err || "Erro desconhecido"));
+  } finally {
+    if (elements.llmLoad) elements.llmLoad.disabled = false;
+  }
+}
+
+async function handleLlmUnload() {
+  setLlmStatusIndicator("loading", "Descarregando…");
+  setLlmFooterStatus("");
+  if (elements.llmUnload) elements.llmUnload.disabled = true;
+
+  try {
+    const result = await postJSON(`${API_BASE}/llm/unload`, {});
+    llmState.status = result;
+    setLlmStatusIndicator("unloaded", "Nenhum modelo carregado");
+    setLlmFooterStatus("Modelo descarregado da memória.");
+  } catch (err) {
+    console.error("Falha ao descarregar modelo", err);
+    setLlmFooterStatus(String(err?.message || err || "Erro desconhecido"));
+  } finally {
+    if (elements.llmUnload) elements.llmUnload.disabled = false;
+  }
+}
