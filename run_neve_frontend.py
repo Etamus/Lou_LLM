@@ -1,7 +1,8 @@
-"""Launcher that starts the Neve web backend and opens the UI in the browser."""
+"""Launcher that starts the Neve web backend and optionally opens the UI."""
 
 from __future__ import annotations
 
+import argparse
 import contextlib
 import importlib.util
 import os
@@ -41,10 +42,19 @@ create_server = backend_module.create_server
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Inicia o backend web da Lou.")
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="Nao abre navegador automaticamente.",
+    )
+    args = parser.parse_args()
+
     host = os.environ.get("LOU_HOST", DEFAULT_HOST)
     port = int(os.environ.get("LOU_PORT", DEFAULT_PORT))
     server = create_server(host, port)
     url = f"http://{host}:{port}"
+    open_browser = not args.no_browser and os.environ.get("LOU_OPEN_BROWSER", "1") != "0"
 
     # Graceful shutdown on Ctrl+C
     shutdown_event = threading.Event()
@@ -71,13 +81,14 @@ def main() -> int:
     print(f"[Lou] Backend escutando em {url}")
     print("[Lou] Pressione Ctrl+C para encerrar.\n")
 
-    # Open the browser after a brief delay so the server is ready
-    def _open_browser():
-        time.sleep(0.4)
-        if not shutdown_event.is_set():
-            webbrowser.open(url)
+    if open_browser:
+        # Open the browser after a brief delay so the server is ready.
+        def _open_browser():
+            time.sleep(0.4)
+            if not shutdown_event.is_set():
+                webbrowser.open(url)
 
-    threading.Thread(target=_open_browser, daemon=True).start()
+        threading.Thread(target=_open_browser, daemon=True).start()
 
     try:
         server.serve_forever()

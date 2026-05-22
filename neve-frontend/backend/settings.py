@@ -1,8 +1,8 @@
 """User-editable settings for the Neve backend.
 
-The Neve backend now uses a local LLM (llama-cpp-python) instead of
-cloud APIs.  Place your .gguf model files in the `models/` directory
-at the project root and load them through the UI or settings below.
+The Neve backend uses the local llama.cpp server installed by instalar.bat.
+Place your .gguf model files in the `models/` directory at the project root
+and load them through the UI or settings below.
 """
 
 # Path to the default GGUF model (relative to project root or absolute).

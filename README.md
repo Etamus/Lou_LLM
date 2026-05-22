@@ -38,7 +38,7 @@ Inteligência artificial com personalidade customizável, executando localmente 
 
 ### Arquitetura Modular em Python
 - **Backend HTTP:** Servidor puro Python (stdlib) em `neve-frontend/backend/server.py`, rodando na porta 8765.
-- **LLM Local:** Integração com llama-cpp-python para execução local de modelos GGUF, com suporte a CUDA/GPU.
+- **LLM Local:** Integração com `llama-server.exe` do llama.cpp para execução local de modelos GGUF, com DLLs CUDA/GPU instaladas no projeto.
 - **Serviço de IA:** Módulo `lou_service/ai.py` constrói prompts e gerencia respostas do LLM.
 - **Formatação de Texto:** `LouFormatter.py` pós-processa outputs do LLM para correção gramatical e splitting em balões de chat.
 - **Configuração:** `lou_service/config.py` gerencia caminhos de arquivos de dados.
@@ -55,44 +55,40 @@ Inteligência artificial com personalidade customizável, executando localmente 
 
 ### Pré-requisitos
 - Python 3.11+
-- GPU NVIDIA com CUDA 12.4+ (recomendado para performance)
+- GPU NVIDIA compatível com CUDA 13.1 (recomendado para performance)
 - Modelo GGUF compatível (ex.: Llama 3.1 8B Instruct)
 
 ### Instalação
 1. **Clone/baixe o projeto** e navegue para a pasta raiz.
 
-2. **Crie ambiente virtual:**
+2. **Execute o instalador:**
    ```bash
-   python -m venv .venv
-   .venv\Scripts\activate  # Windows
+   instalar.bat
    ```
+   Ele abre uma interface WPF, cria/atualiza a `.venv`, consulta o último release do `ggml-org/llama.cpp` no GitHub e baixa os pacotes Windows x64 CUDA 13.1 para `llamacpp-server/`.
 
-3. **Instale dependências:**
-   ```bash
-   pip install llama-cpp-python[server]==0.3.4
-   ```
-
-4. **Baixe um modelo GGUF:**
+3. **Baixe um modelo GGUF:**
    - Recomendado: [Llama 3.1 8B Instruct Q4_K_M](https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF)
    - Salve em `models/` (crie a pasta) como `llama-3.1-8b-instruct-q5_k_m.gguf`
 
 ### Configuração
 - **Personalidade:** Edite `data/personality_prompt.json` com a ficha da Lou.
-- **Modelo:** Em `lou_service/config.py`, ajuste `model_path` para o caminho do seu modelo GGUF.
-- **Parâmetros LLM:** Em `lou_service/ai.py`, configure temperatura, top_p, etc. (padrão: temp=0.9, top_p=0.92, n_ctx=8192, max_tokens=512).
+- **Modelo:** Coloque arquivos `.gguf` em `models/` e carregue pela interface.
+- **Parâmetros LLM:** Em `neve-frontend/backend/settings.py`, configure temperatura, top_p, n_ctx, max_tokens etc.
 - **Assets:** Adicione avatares em `assets/avatars/` e GIFs em `assets/gifs/`.
 
 ### Execução
-1. **Ative o ambiente virtual:**
+1. **Abra como aplicativo:**
    ```bash
-   .venv\Scripts\activate
+   iniciar.bat
    ```
+   O script sobe o backend local e abre a interface em uma janela de navegador no modo app.
 
-2. **Execute o frontend Neve:**
+2. **Modo servidor simples (opcional):**
    ```bash
-   python run_neve_frontend.py
+   .venv\Scripts\python.exe run_neve_frontend.py
    ```
-   - Sobe o backend em `http://127.0.0.1:8765` e abre janela Qt com o frontend.
+   - Sobe o backend em `http://127.0.0.1:8765`.
    - Para rodar apenas o servidor: `python neve-frontend/backend/server.py`
 
 3. **Teste:**
@@ -100,7 +96,6 @@ Inteligência artificial com personalidade customizável, executando localmente 
    - Envie mensagens; a Lou responderá via LLM local.
 
 ### Dependências Extras (Opcional)
-- Para janela Qt: `pip install PySide6 PySide6-QtWebEngine`
 - Para desenvolvimento: `pip install pytest` (para testes)
 
 ---

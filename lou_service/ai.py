@@ -1,24 +1,31 @@
-"""Local-LLM responder (llama-cpp-python) that keeps Lou's persona consistent across frontends."""
+"""Local-LLM responder that keeps Lou's persona consistent across frontends."""
 
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import re
+import socket
+import subprocess
+import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from collections import deque
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Deque
 
+LLAMA_IMPORT_ERROR: Optional[BaseException] = None
+
 try:  # Optional local LLM backend
     # On Windows, CUDA DLLs from nvidia-* pip packages must be
     # registered before loading llama_cpp's native library.
     # llama_cpp uses winmode=RTLD_GLOBAL, which ignores add_dll_directory;
     # we must put the directories on PATH instead.
-    import sys
     if sys.platform == "win32":
         _sp = Path(sys.prefix, "Lib", "site-packages")
         for _nv_sub in ("nvidia/cuda_runtime/bin", "nvidia/cublas/bin", "llama_cpp/lib"):
@@ -29,8 +36,9 @@ try:  # Optional local LLM backend
                     os.environ["PATH"] = _nv_str + os.pathsep + os.environ.get("PATH", "")
                 os.add_dll_directory(_nv_str)
     from llama_cpp import Llama
-except ImportError:  # pragma: no cover - handled at runtime
+except Exception as exc:  # pragma: no cover - handled at runtime
     Llama = None
+    LLAMA_IMPORT_ERROR = exc
 
 from LouFormatter import sanitize_and_split_response
 
@@ -40,6 +48,156 @@ class _SimpleResponse:
 
     def __init__(self, text: str) -> None:
         self.text = text or ""
+
+
+class _LlamaServerClient:
+    """Small OpenAI-compatible client for the bundled llama-server.exe."""
+
+    def __init__(
+        self,
+        *,
+        server_exe: Path,
+        root_dir: Path,
+        model_path: Path,
+        n_ctx: int,
+        n_threads: Optional[int],
+        n_gpu_layers: int,
+    ) -> None:
+        self.server_exe = server_exe
+        self.root_dir = root_dir
+        self.model_path = model_path
+        self.n_ctx = n_ctx
+        self.n_threads = n_threads
+        self.n_gpu_layers = n_gpu_layers
+        self.port = self._pick_port()
+        self.base_url = f"http://127.0.0.1:{self.port}"
+        self._process: Optional[subprocess.Popen[Any]] = None
+        self._start()
+        atexit.register(self.close)
+
+    def _pick_port(self) -> int:
+        configured = os.getenv("LOU_LLAMA_PORT") or os.getenv("LLAMA_SERVER_PORT")
+        if configured:
+            return int(configured)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.bind(("127.0.0.1", 0))
+            return int(sock.getsockname()[1])
+
+    def _runtime_dirs(self) -> List[Path]:
+        dirs = {self.server_exe.parent}
+        install_root = self.root_dir / "llamacpp-server"
+        if install_root.exists():
+            for path in install_root.rglob("*"):
+                if path.is_file() and path.suffix.lower() in {".dll", ".exe"}:
+                    dirs.add(path.parent)
+        return sorted(dirs, key=lambda item: len(str(item)))
+
+    def _build_env(self) -> Dict[str, str]:
+        env = os.environ.copy()
+        runtime_dirs = [str(path) for path in self._runtime_dirs()]
+        existing_path = env.get("PATH", "")
+        env["PATH"] = os.pathsep.join(runtime_dirs + [existing_path])
+        return env
+
+    def _start(self) -> None:
+        args = [
+            str(self.server_exe),
+            "--model",
+            str(self.model_path),
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(self.port),
+            "-c",
+            str(self.n_ctx),
+            "-ngl",
+            str(self.n_gpu_layers),
+            "--jinja",
+        ]
+        if self.n_threads:
+            args.extend(["-t", str(self.n_threads)])
+
+        creationflags = 0
+        if sys.platform == "win32" and hasattr(subprocess, "CREATE_NO_WINDOW"):
+            creationflags = subprocess.CREATE_NO_WINDOW
+
+        self._process = subprocess.Popen(
+            args,
+            cwd=str(self.server_exe.parent),
+            env=self._build_env(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=creationflags,
+        )
+        self._wait_until_ready()
+
+    def _wait_until_ready(self, timeout_seconds: int = 180) -> None:
+        deadline = time.time() + timeout_seconds
+        last_error: Optional[BaseException] = None
+        while time.time() < deadline:
+            if self._process is not None and self._process.poll() is not None:
+                raise RuntimeError("llama-server.exe encerrou antes de ficar pronto")
+            try:
+                request = urllib.request.Request(self.base_url + "/health", method="GET")
+                with urllib.request.urlopen(request, timeout=2):
+                    pass
+                return
+            except urllib.error.HTTPError as exc:
+                last_error = exc
+                if exc.code == 404:
+                    return
+            except Exception as exc:
+                last_error = exc
+            time.sleep(0.5)
+        detail = f": {last_error}" if last_error else ""
+        raise RuntimeError(f"llama-server.exe nao respondeu em {timeout_seconds}s{detail}")
+
+    def _request_json(
+        self,
+        method: str,
+        path: str,
+        payload: Optional[Dict[str, Any]] = None,
+        *,
+        timeout: int = 120,
+    ) -> Dict[str, Any]:
+        data = None
+        headers = {"Accept": "application/json"}
+        if payload is not None:
+            data = json.dumps(payload).encode("utf-8")
+            headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(
+            self.base_url + path,
+            data=data,
+            headers=headers,
+            method=method,
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read().decode("utf-8", errors="replace")
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"llama-server respondeu HTTP {exc.code}: {detail}") from exc
+        if not raw.strip():
+            return {}
+        return json.loads(raw)
+
+    def create_chat_completion(self, **kwargs: Any) -> Dict[str, Any]:
+        payload = {"model": "local"}
+        payload.update(kwargs)
+        return self._request_json("POST", "/v1/chat/completions", payload, timeout=300)
+
+    def close(self) -> None:
+        process = self._process
+        self._process = None
+        if process is None or process.poll() is not None:
+            return
+        process.terminate()
+        try:
+            process.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
 PROACTIVE_CREATIVE_PROMPT = """
 CONTEXTO: O usuário ("Pai") ficou em silêncio e você quer quebrar esse silêncio. A ÚLTIMA mensagem no histórico foi sua, então você NÃO PODE simplesmente respondê-la novamente.
 
@@ -533,7 +691,15 @@ class LouAIResponder:
         self._models_dir.mkdir(parents=True, exist_ok=True)
         env_path = os.getenv("LLAMA_MODEL_PATH") or ""
         default_path = self._models_dir / "model.gguf"
-        resolved = Path(model_path or env_path or default_path).expanduser().resolve()
+        selected_path = Path(model_path or env_path or default_path)
+        if not model_path and not env_path and not default_path.exists():
+            available = sorted(
+                path for path in self._models_dir.iterdir()
+                if path.is_file() and path.suffix.lower() in {".gguf", ".bin"}
+            )
+            if available:
+                selected_path = available[0]
+        resolved = selected_path.expanduser().resolve()
         self._llama_model_path: Path = resolved
         self._llama_n_ctx: int = int(n_ctx)
         self._llama_n_threads: Optional[int] = n_threads if n_threads is None else int(n_threads)
@@ -1400,8 +1566,15 @@ class LouAIResponder:
         """Return current model status and settings for the UI."""
         with self._model_lock:
             loaded = self._model is not None
+            active_model = self._model
+        server_exe = self._find_bundled_llama_server()
+        backend = "llama.cpp server" if server_exe else "llama-cpp-python"
+        if isinstance(active_model, _LlamaServerClient):
+            backend = "llama.cpp server"
         return {
             "loaded": loaded,
+            "backend": backend,
+            "llama_server": str(server_exe) if server_exe else "",
             "model_path": str(self._llama_model_path),
             "n_ctx": self._llama_n_ctx,
             "n_threads": self._llama_n_threads,
@@ -1427,6 +1600,45 @@ class LouAIResponder:
             entries.append({"filename": path.name, "size_mb": size_mb, "path": str(path)})
         return entries
 
+    def _find_bundled_llama_server(self) -> Optional[Path]:
+        install_root = self._root_dir / "llamacpp-server"
+        if not install_root.exists():
+            return None
+        candidates = sorted(
+            install_root.rglob("llama-server.exe"),
+            key=lambda path: (0 if "cuda-13.1" in str(path).lower() else 1, len(str(path))),
+        )
+        return candidates[0] if candidates else None
+
+    def _missing_backend_error(self) -> str:
+        message = (
+            "llama.cpp nao instalado no projeto. Execute instalar.bat para baixar "
+            "o pacote bin-win-cuda-13.1-x64 e as DLLs CUDA locais."
+        )
+        if LLAMA_IMPORT_ERROR is not None:
+            message += f" Fallback llama-cpp-python indisponivel: {LLAMA_IMPORT_ERROR}"
+        return message
+
+    def _create_model_backend(self) -> Any:
+        server_exe = self._find_bundled_llama_server()
+        if server_exe is not None:
+            return _LlamaServerClient(
+                server_exe=server_exe,
+                root_dir=self._root_dir,
+                model_path=self._llama_model_path,
+                n_ctx=self._llama_n_ctx,
+                n_threads=self._llama_n_threads,
+                n_gpu_layers=self._llama_n_gpu_layers,
+            )
+        if Llama is None:
+            raise RuntimeError(self._missing_backend_error())
+        return Llama(
+            model_path=str(self._llama_model_path),
+            n_ctx=self._llama_n_ctx,
+            n_threads=self._llama_n_threads,
+            n_gpu_layers=self._llama_n_gpu_layers,
+        )
+
     def load_model(
         self,
         *,
@@ -1441,8 +1653,6 @@ class LouAIResponder:
         max_tokens: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Load (or reload) a GGUF model at runtime."""
-        if Llama is None:
-            raise RuntimeError("Instale o pacote 'llama-cpp-python' para ativar a IA local")
         if model_path:
             resolved = Path(model_path).expanduser().resolve()
             if not resolved.exists():
@@ -1469,12 +1679,7 @@ class LouAIResponder:
             self._max_tokens = max(32, min(4096, int(max_tokens)))
         with self._model_lock:
             self._unload_model_unsafe()
-            self._model = Llama(
-                model_path=str(self._llama_model_path),
-                n_ctx=self._llama_n_ctx,
-                n_threads=self._llama_n_threads,
-                n_gpu_layers=self._llama_n_gpu_layers,
-            )
+            self._model = self._create_model_backend()
             personality = self._service.get_personality_prompt() or {}
             self._system_instruction = build_system_instruction(personality)
             self._personality_signature = json.dumps(personality, sort_keys=True)
@@ -1491,7 +1696,11 @@ class LouAIResponder:
         """Free model resources (caller must hold _model_lock)."""
         if self._model is not None:
             try:
-                del self._model
+                closer = getattr(self._model, "close", None)
+                if callable(closer):
+                    closer()
+                else:
+                    del self._model
             except Exception:
                 pass
             self._model = None
@@ -1499,8 +1708,6 @@ class LouAIResponder:
             self._personality_signature = None
 
     def _ensure_model(self) -> Any:
-        if Llama is None:
-            raise RuntimeError("Instale o pacote 'llama-cpp-python' para ativar a IA local")
         personality = self._service.get_personality_prompt() or {}
         signature = json.dumps(personality, sort_keys=True)
         with self._model_lock:
@@ -1510,12 +1717,7 @@ class LouAIResponder:
                         "Nenhum modelo carregado. Use a interface para carregar um modelo GGUF."
                     )
                 self._system_instruction = build_system_instruction(personality)
-                self._model = Llama(
-                    model_path=str(self._llama_model_path),
-                    n_ctx=self._llama_n_ctx,
-                    n_threads=self._llama_n_threads,
-                    n_gpu_layers=self._llama_n_gpu_layers,
-                )
+                self._model = self._create_model_backend()
                 self._personality_signature = signature
                 self._model_loaded = True
             elif signature != self._personality_signature:

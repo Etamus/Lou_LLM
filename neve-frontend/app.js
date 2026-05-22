@@ -937,7 +937,8 @@ function createMessageNode(message, channelMessages) {
 
   const bubble = document.createElement("div");
   bubble.className = "message-bubble";
-  const safeHTML = escapeHTML(message.content).replace(/\n/g, "<br>");
+  const visibleContent = shouldHideGifText(message) ? "" : message.content;
+  const safeHTML = escapeHTML(visibleContent).replace(/\n/g, "<br>");
   bubble.innerHTML = safeHTML;
 
   if (message.replyTo) {
@@ -968,6 +969,12 @@ function createMessageNode(message, channelMessages) {
   content.append(header, bubble);
   row.append(avatar, content);
   return row;
+}
+
+function shouldHideGifText(message) {
+  const content = String(message?.content || "").trim();
+  if (!/^\[GIF\]\s+\S+/i.test(content)) return false;
+  return Array.isArray(message.attachments) && message.attachments.some((attachment) => attachment?.type === "gif");
 }
 
 function buildAvatar(profile) {
@@ -2279,7 +2286,6 @@ function renderGifGrid() {
   if (!gifState.filtered.length) {
     const placeholder = document.createElement("p");
     placeholder.className = "gif-description";
-    placeholder.style.margin = "0";
     placeholder.textContent = gifState.hasLoaded
       ? "Nenhum GIF corresponde a sua busca."
       : "Ainda não há GIFs disponíveis.";
@@ -2313,7 +2319,7 @@ function handleGifSearchInput(event) {
     gifState.filtered.length
       ? `${gifState.filtered.length} GIF(s) encontrados`
       : value
-      ? "Nenhum GIF com esse nome"
+      ? ""
       : "Nenhum GIF disponível"
   );
 }

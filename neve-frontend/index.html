@@ -104,24 +104,22 @@
           <button class="round-button" title="Abrir GIFs" type="button" data-role="gif-button">
             <i class="fas fa-photo-film" aria-hidden="true"></i>
           </button>
-          <textarea
-            id="message-input"
-            name="message"
-            placeholder="Conversar em @geral"
-            rows="1"
-            autocomplete="off"
-          ></textarea>
-          <div class="composer-actions">
-            <button class="primary-button" type="submit">
-              <i class="fas fa-paper-plane" aria-hidden="true"></i>
-              <span>Enviar</span>
+          <div class="composer-input-shell">
+            <textarea
+              id="message-input"
+              name="message"
+              placeholder="Conversar em @geral"
+              rows="1"
+              autocomplete="off"
+            ></textarea>
+            <button class="composer-send-button" type="submit" title="Enviar mensagem" aria-label="Enviar mensagem">
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 19V5"></path>
+                <path d="m5 12 7-7 7 7"></path>
+              </svg>
             </button>
           </div>
         </form>
-        <footer class="chat-footer" aria-live="polite">
-          <span class="status-dot"></span>
-          <p>Conectado ao backend local • Porta 8765</p>
-        </footer>
       </main>
       </div>
     </div>
@@ -211,8 +209,6 @@
         <div class="gif-body">
           <div class="gif-grid" data-role="gif-list"></div>
         </div>
-        <footer class="gif-footer">
-        </footer>
       </section>
     </div>
     <div class="llm-overlay is-hidden" data-role="llm-overlay" aria-live="polite">

@@ -132,6 +132,24 @@
               ],
               "content": "Pai?",
               "timestamp": "2026-03-07T15:07:46"
+            },
+            {
+              "id": "m-726fa378-e219-4a1b-b8a8-1d1dfa3e70eb",
+              "role": "user",
+              "authorId": "user",
+              "parts": [
+                "[GIF] confused"
+              ],
+              "content": "[GIF] confused",
+              "timestamp": "2026-05-22T12:14:26",
+              "attachments": [
+                {
+                  "type": "gif",
+                  "name": "confused",
+                  "filename": "confused.gif",
+                  "url": "/assets/gifs/confused.gif"
+                }
+              ]
             }
           ]
         }

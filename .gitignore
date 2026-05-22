@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.py[cod]
+
+downloads/
+.lou-webview-profile/
+llamacpp-server/bin/
+llamacpp-server/version.txt
+llamacpp-server/*.zip
